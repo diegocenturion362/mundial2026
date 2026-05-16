@@ -205,23 +205,11 @@ select { appearance:none; }
 <body>
 
 <!-- ═══════════ PLAYER SELECT ═══════════ -->
-<div id="player-select">
-  <div class="logo-area">
-    <span class="logo-ball">⚽</span>
-    <div class="logo-title">MUNDIAL 2026</div>
-    <div class="logo-sub">Pronósticos entre amigos · USA · MEX · CAN</div>
-  </div>
-  <div class="select-card">
-    <h2>¿Quién sos?</h2>
-    <div class="player-list" id="existing-players">
-      <p style="font-size:13px;color:var(--text-d);text-align:center;">Cargando...</p>
-    </div>
-    <div class="divider">o unite nuevo</div>
-    <div class="new-player-form">
-      <input type="text" id="new-name" placeholder="Tu nombre o apodo" style="flex:1;min-width:0;" maxlength="20"
-        onkeydown="if(event.key==='Enter')createAndJoin()">
-      <button class="btn btn-primary" onclick="createAndJoin()">Unirse</button>
-    </div>
+<div id="player-select" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2rem;padding:2rem;min-height:100vh;">
+  <div style="text-align:center;">
+    <div style="font-size:52px;">⚽</div>
+    <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:.5rem;">MUNDIAL 2026</div>
+    <div style="font-size:13px;color:var(--text-m);margin-top:.25rem;">Conectando...</div>
   </div>
 </div>
 
