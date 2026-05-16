@@ -679,17 +679,20 @@ function hashPin(pin) {
 
 function renderLoginScreen() {
   const players = DB.getPlayers();
-  const chips = players.length ? `
-    <div class="login-divider">o entrá directamente</div>
+  // Solo mostrar los chips si hay pocos jugadores (≤8) para no hacer la pantalla enorme
+  // Con "Recordarme", la mayoría entra automático y no llega a ver esta lista
+  const chips = players.length && players.length <= 8 ? `
+    <div class="login-divider">¿Ya jugás? Seleccioná tu nombre</div>
     <div class="player-chips">
       ${players.map(p => {
         const c = color(p.colorIdx);
-        return `<div class="player-chip" onclick="quickLogin('${p.id}')">
-          <div class="ava" style="width:28px;height:28px;background:${c.bg};color:${c.tc};font-size:10px;">${initials(p.name)}</div>
-          <span>${p.name}</span>
-        </div>`;
+        return \`<div class="player-chip" onclick="quickLogin('${p.id}')">
+          <div class="ava" style="width:28px;height:28px;background:\${c.bg};color:\${c.tc};font-size:10px;">\${initials(p.name)}</div>
+          <span>\${p.name}</span>
+        </div>\`;
       }).join('')}
-    </div>` : '';
+    </div>` : players.length > 8 ? `
+    <div class="login-divider">¿Ya jugás? Ingresá tu nombre y PIN</div>` : '';
 
   return `
     <div style="text-align:center;">
@@ -712,6 +715,10 @@ function renderLoginScreen() {
         </div>
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="loginWithPin()">Entrar →</button>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-m);">
+        <input type="checkbox" id="ln-remember" style="width:16px;height:16px;accent-color:var(--accent);">
+        Recordarme en este dispositivo
+      </label>
       ${chips}
     </div>`;
 }
@@ -751,9 +758,11 @@ function loginWithPin() {
       // Primera vez que usa PIN — lo asignamos
       existing.pinHash = pinHash;
       DB.savePlayers(players);
-      doLogin(existing);
+      const rem0 = document.getElementById('ln-remember')?.checked;
+      doLogin(existing, rem0);
     } else if (existing.pinHash === pinHash) {
-      doLogin(existing);
+      const rem1 = document.getElementById('ln-remember')?.checked;
+      doLogin(existing, rem1);
     } else {
       toast('PIN incorrecto 🔒','err');
     }
@@ -763,7 +772,8 @@ function loginWithPin() {
     players.push(np);
     DB.savePlayers(players);
     toast('¡Bienvenido/a ' + name + '! 🎉','ok');
-    doLogin(np);
+    const rem2 = document.getElementById('ln-remember')?.checked;
+    doLogin(np, rem2);
   }
 }
 
@@ -778,9 +788,10 @@ function quickLogin(id) {
   if (nameEl) { nameEl.value = p.name; document.getElementById('ln-pin-0').focus(); }
 }
 
-function doLogin(p) {
+function doLogin(p, remember=false) {
   currentPlayer = p;
   sessionStorage.setItem('wc26_cp', JSON.stringify(p));
+  if (remember) localStorage.setItem('wc26_remember', JSON.stringify({id: p.id}));
   showApp();
 }
 
@@ -792,6 +803,7 @@ function selectPlayer(id) {
 
 function changePlayer() {
   sessionStorage.removeItem('wc26_cp');
+  localStorage.removeItem('wc26_remember');
   currentPlayer = null;
   document.getElementById('app').style.display = 'none';
   const sel = document.getElementById('player-select');
@@ -1285,12 +1297,24 @@ function renderAdmin(con) {
     <div style="display:flex;flex-direction:column;gap:10px;">
 
       <div style="padding:12px 14px;background:rgba(248,113,113,.07);border:.5px solid rgba(248,113,113,.2);border-radius:10px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:4px;">🧹 Limpiar jugadores de prueba</div>
-        <div style="font-size:12px;color:var(--text-m);margin-bottom:10px;line-height:1.5;">
-          Borra todos los jugadores, pronósticos, comodines y especiales.<br>
-          <strong style="color:var(--gold);">Los partidos y resultados de FIFA no se tocan.</strong>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">👤 Gestión de jugadores</div>
+        ${DB.getPlayers().length === 0
+          ? '<p style="font-size:12px;color:var(--text-d);">No hay jugadores registrados.</p>'
+          : DB.getPlayers().map(p => {
+              const c = color(p.colorIdx);
+              return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:.5px solid var(--border);">
+                <div class="ava" style="width:32px;height:32px;background:${c.bg};color:${c.tc};font-size:11px;flex-shrink:0;">${initials(p.name)}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13px;font-weight:500;">${p.name}</div>
+                  <div style="font-size:11px;color:var(--text-d);">PIN: ${p.pinHash ? '••••' : 'sin PIN'}</div>
+                </div>
+                <button class="btn btn-secondary" style="padding:5px 10px;font-size:11px;" onclick="adminResetPin('${p.id}')">🔑 Reset PIN</button>
+                <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;" onclick="adminDeletePlayer('${p.id}')">✕</button>
+              </div>`;
+            }).join('')}
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-danger" onclick="clearPlayers()" style="font-size:12px;">🗑 Borrar todos</button>
         </div>
-        <button class="btn btn-danger" onclick="clearPlayers()">🗑 Borrar jugadores y pronósticos</button>
       </div>
 
       <div style="padding:12px 14px;background:rgba(248,113,113,.07);border:.5px solid rgba(248,113,113,.2);border-radius:10px;">
@@ -1377,6 +1401,36 @@ function importData() {
   input.click();
 }
 
+function adminDeletePlayer(playerId) {
+  const players = DB.getPlayers();
+  const p = players.find(x => x.id === playerId);
+  if (!p) return;
+  if (!confirm(`¿Eliminar a ${p.name}? Sus pronósticos también serán borrados.`)) return;
+  // Borrar jugador
+  DB.savePlayers(players.filter(x => x.id !== playerId));
+  // Borrar sus pronósticos
+  DB.savePredictions(DB.getPredictions().filter(x => x.playerId !== playerId));
+  // Borrar sus wildcards
+  const wc = DB.getWildcards();
+  delete wc[playerId];
+  DB.saveWildcards(wc);
+  // Borrar sus especiales
+  DB.saveSpecial(DB.getSpecial().filter(x => x.playerId !== playerId));
+  toast(`${p.name} eliminado ✓`, 'ok');
+  renderView('admin');
+}
+
+function adminResetPin(playerId) {
+  const players = DB.getPlayers();
+  const p = players.find(x => x.id === playerId);
+  if (!p) return;
+  if (!confirm(`¿Resetear el PIN de ${p.name}?\nLa próxima vez que ingrese podrá elegir un PIN nuevo.`)) return;
+  delete p.pinHash;
+  DB.savePlayers(players);
+  toast(`PIN de ${p.name} reseteado ✓`, 'ok');
+  renderView('admin');
+}
+
 function clearPlayers() {
   if (!confirm('¿Borrar todos los jugadores y pronósticos?\nLos partidos y resultados de FIFA no se tocan.')) return;
   DB.savePlayers([]);
@@ -1450,18 +1504,31 @@ function clearAll() {
   // 4. Restaurar HTML del player-select
   selEl.innerHTML = renderLoginScreen();
 
-  // 5. Restaurar sesión de jugador
-  const saved = sessionStorage.getItem('wc26_cp');
-  if (saved) {
+  // 5. Restaurar sesión — primero sessionStorage (pestaña actual), luego localStorage (recordarme)
+  let autoLogged = false;
+  const savedSession = sessionStorage.getItem('wc26_cp');
+  const savedRemember = localStorage.getItem('wc26_remember');
+
+  if (savedSession) {
     try {
-      const sp = JSON.parse(saved);
+      const sp = JSON.parse(savedSession);
       const found = DB.getPlayers().find(x => x.id===sp.id);
-      if (found) { currentPlayer=found; showApp(); }
-      else renderPlayerSelect();
-    } catch { renderPlayerSelect(); }
-  } else {
-    renderPlayerSelect();
+      if (found) { currentPlayer=found; showApp(); autoLogged=true; }
+    } catch {}
   }
+  if (!autoLogged && savedRemember) {
+    try {
+      const sr = JSON.parse(savedRemember);
+      const found = DB.getPlayers().find(x => x.id===sr.id);
+      if (found) {
+        currentPlayer=found;
+        sessionStorage.setItem('wc26_cp', JSON.stringify(found));
+        showApp();
+        autoLogged=true;
+      }
+    } catch {}
+  }
+  if (!autoLogged) renderPlayerSelect();
 
   // 6. Obtener datos frescos de FIFA en segundo plano
   loadFifaMatches({ silent: true });
