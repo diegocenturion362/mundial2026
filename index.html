@@ -1194,15 +1194,15 @@ function renderChatPanel(matchId) {
           const who=myReactions[emoji]||[];
           const hasReacted=who.includes(currentPlayer.id);
           const count=who.length;
-          return '<button class="react-btn '+(hasReacted?'reacted':'')+'" onclick="toggleReaction(''+matchId+'',''+msg.id+'',''+emoji+'')">'+
+          return '<button class="react-btn '+(hasReacted?'reacted':'')+'" onclick="toggleReaction(\''+matchId+'\',\''+msg.id+'\',\''+emoji+'\')">'+
             emoji+(count>0?'<span class="react-count">'+count+'</span>':'')+'</button>';
         }).join('')+
         '</div></div></div>';
     }
   }
   html+='</div><div class="chat-input-row">'+
-    '<input class="chat-input" id="chat-in-'+matchId+'" placeholder="Escribí algo..." maxlength="120" onkeydown="if(event.key==='Enter')sendChat(''+matchId+'')">'+
-    '<button class="chat-send" onclick="sendChat(''+matchId+'')">➤</button></div></div>';
+    '<input class="chat-input" id="chat-in-'+matchId+'" placeholder="Escribí algo..." maxlength="120" onkeydown="if(event.key===\'Enter\')sendChat(\''+matchId+'\')">'+
+    '<button class="chat-send" onclick="sendChat(\''+matchId+'\')">➤</button></div></div>';
   return html;
 }
 
