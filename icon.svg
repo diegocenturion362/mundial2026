@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fondo verde oscuro con esquinas redondeadas -->
+  <rect width="512" height="512" rx="90" fill="#0e1a10"/>
+
+  <!-- Pelota: círculo exterior blanco -->
+  <circle cx="256" cy="210" r="148" fill="#ecfdf5"/>
+
+  <!-- Pelota: pentágono central negro -->
+  <polygon points="256,112  303,145  284,200  228,200  209,145" fill="#162419"/>
+
+  <!-- Pelota: pentágonos laterales -->
+  <polygon points="209,145  162,145  143,198  184,228  228,200" fill="#162419"/>
+  <polygon points="303,145  350,145  369,198  328,228  284,200" fill="#162419"/>
+  <polygon points="184,228  143,198  119,248  152,286  203,272" fill="#162419"/>
+  <polygon points="328,228  369,198  393,248  360,286  309,272" fill="#162419"/>
+  <polygon points="203,272  152,286  175,338  228,338  256,308" fill="#162419"/>
+  <polygon points="309,272  360,286  337,338  284,338  256,308" fill="#162419"/>
+
+  <!-- Texto MUN'26 abajo -->
+  <text
+    x="256" y="442"
+    font-size="78"
+    text-anchor="middle"
+    fill="#4ade80"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    letter-spacing="3">MUN'26</text>
+</svg>
