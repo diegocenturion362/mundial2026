@@ -463,12 +463,18 @@ async function initFirebase() {
   const db = firebase.database();
   _fbDatabase = db;
 
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Firebase timeout (8s)')), 8000)
+  );
+
   let snap;
   try {
-    snap = await db.ref(FB_ROOT).get();
+    snap = await Promise.race([db.ref(FB_ROOT).get(), timeout]);
   } catch(e) {
-    console.error('Firebase read error:', e);
-    throw e;
+    console.warn('Firebase read error:', e.message);
+    // Continuar sin datos remotos — se usará caché local
+    setupFirebaseListeners(db);
+    return;
   }
 
   const data = snap.val() || {};
