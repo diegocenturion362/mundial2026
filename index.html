@@ -621,18 +621,7 @@ const PHASES = {
   r16:'Octavos de Final', qf:'Cuartos de Final',
   sf:'Semifinales', final:'Final'
 };
-const ACHIEVEMENTS = [
-  {id:'first_exact', icon:'🎯', title:'Francotirador', desc:'Primer resultado exacto',         check:(s,r)=> s.exact >= 1},
-  {id:'streak3',     icon:'🔥', title:'En llamas',     desc:'3 aciertos seguidos',              check:(s,r)=> s.maxStreak >= 3},
-  {id:'exact5',      icon:'🧠', title:'Vidente',       desc:'5 resultados exactos',             check:(s,r)=> s.exact >= 5},
-  {id:'exact10',     icon:'🌟', title:'Oráculo',       desc:'10 resultados exactos',            check:(s,r)=> s.exact >= 10},
-  {id:'wc_win',      icon:'🃏', title:'Comodín certero',desc:'Ganaste puntos dobles con el comodín',check:(s,r)=> s.wildcardWin},
-  {id:'top3',        icon:'🏆', title:'Top 3',         desc:'Estás en el podio',                check:(s,r)=> r <= 3 && r > 0},
-  {id:'leader',      icon:'👑', title:'Líder',         desc:'Llegaste al primer puesto',        check:(s,r)=> r === 1},
-  {id:'streak5',     icon:'⚡', title:'Imparable',     desc:'5 aciertos consecutivos',          check:(s,r)=> s.maxStreak >= 5},
-  {id:'no_blank',    icon:'💪', title:'Comprometido',  desc:'Pronosticaste 10 partidos',        check:(s,r)=> s.totalPreds >= 10},
-  {id:'champion_ok', icon:'🏅', title:'El que sabe',   desc:'Acertaste el campeón del Mundial', check:(s,r)=> s.championOk},
-];
+
 
 // ╔══════════════════════════════════════════════════╗
 // ║  ESTADO                                           ║
