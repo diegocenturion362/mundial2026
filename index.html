@@ -1546,6 +1546,8 @@ function renderPredictions(con) {
     <button class="fifa-refresh-btn" onclick="loadFifaMatches()" ${fifaLoading?'disabled':''}>↻ Actualizar</button>
   </div>`;
 
+  html += reglHtml;
+
   if (!matches.length) {
     html += `<div class="empty"><div class="empty-icon">📶</div>
       <p style="margin-bottom:1rem;">Conectando con FIFA…</p>
