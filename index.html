@@ -438,14 +438,13 @@ function setupFirebaseListeners(db) {
 // pero también se guardan en Firebase para compartir entre dispositivos.
 function loadCachedMatchesFromFirebase(callback) {
   if (_fbDatabase) {
-    _fbDatabase.ref(FB_ROOT + '/fifa_matches').get().then(snap => {
-      const val = snap.val();
-      if (val && Array.isArray(val) && val.length) {
-        callback(val);
-      } else {
-        callback([]);
-      }
-    }).catch(() => callback([]));
+    const timeout = new Promise(resolve => setTimeout(() => resolve(null), 3000));
+    Promise.race([_fbDatabase.ref(FB_ROOT + '/fifa_matches').get(), timeout])
+      .then(snap => {
+        if (!snap) return callback([]);
+        const val = snap.val();
+        callback(val && Array.isArray(val) && val.length ? val : []);
+      }).catch(() => callback([]));
   } else {
     callback([]);
   }
