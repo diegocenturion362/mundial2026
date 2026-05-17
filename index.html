@@ -1249,10 +1249,10 @@ function renderMisApuestas(con) {
     '<div style="font-family:var(--fd);font-size:28px;font-weight:700;color:var(--accent);">'+sc.pts+'</div>'+
     '<div style="font-size:10px;color:var(--text-d);">'+sc.exact+' exactos</div></div></div>'+
     '<div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px;">'+
-    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas('all')" id="fa-all">Todos</button>'+
-    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas('pending')" id="fa-pending">Sin cargar</button>'+
-    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas('exact')" id="fa-exact">🎯 Exactos</button>'+
-    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas('wrong')" id="fa-wrong">✗ Perdidos</button>'+
+    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas(\'all\')" id="fa-all">Todos</button>'+
+    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas(\'pending\')" id="fa-pending">Sin cargar</button>'+
+    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas(\'exact\')" id="fa-exact">🎯 Exactos</button>'+
+    '<button class="btn btn-secondary btn-sm" onclick="filterApuestas(\'wrong\')" id="fa-wrong">✗ Perdidos</button>'+
     '</div><div id="apuestas-list">';
   for (const m of allM) {
     const pred=myPreds.find(p=>p.matchId===m.id);
@@ -1283,7 +1283,7 @@ function renderMisApuestas(con) {
       '<div style="text-align:right;flex-shrink:0;">'+
       (pred?'<div style="font-family:var(--fd);font-size:15px;font-weight:700;">'+pred.homeScore+'-'+pred.awayScore+'</div>':'')+
       '<div class="bet-pts '+ptsCls+'">'+ptsStr+'</div></div>'+
-      (isOpen&&!pred?'<button class="btn-save" onclick="navigate('predictions')" style="flex-shrink:0;padding:5px 10px;font-size:11px;">Cargar</button>':'')+
+      (isOpen&&!pred?'<button class="btn-save" onclick="navigate(\'predictions\')" style="flex-shrink:0;padding:5px 10px;font-size:11px;">Cargar</button>':'')+
       '</div>';
   }
   html+='</div>';
@@ -1335,10 +1335,10 @@ function renderPerfil(con) {
     '<div class="profile-pts-sub">'+(sc.confirmedPts||0)+' pts confirmados'+(sc.provisionalPts>0?' · <span style="color:var(--gold)">+'+sc.provisionalPts+' en juego</span>':'')+
     '</div></div>'+
     '<div class="jornada-tabs" style="margin-bottom:12px;">'+
-    '<button class="jornada-tab '+(perfilTab==='stats'?'active':'')+'" onclick="setPerfilTab('stats')">📊 Stats</button>'+
-    '<button class="jornada-tab '+(perfilTab==='logros'?'active':'')+'" onclick="setPerfilTab('logros')">🏆 Logros</button>'+
-    '<button class="jornada-tab '+(perfilTab==='historial'?'active':'')+'" onclick="setPerfilTab('historial')">📋 Historial</button>'+
-    '<button class="jornada-tab '+(perfilTab==='badges'?'active':'')+'" onclick="setPerfilTab('badges')">⭐ Fun Stats</button>'+
+    '<button class="jornada-tab '+(perfilTab==='stats'?'active':'')+'" onclick="setPerfilTab(\'stats\')">📊 Stats</button>'+
+    '<button class="jornada-tab '+(perfilTab==='logros'?'active':'')+'" onclick="setPerfilTab(\'logros\')">🏆 Logros</button>'+
+    '<button class="jornada-tab '+(perfilTab==='historial'?'active':'')+'" onclick="setPerfilTab(\'historial\')">📋 Historial</button>'+
+    '<button class="jornada-tab '+(perfilTab==='badges'?'active':'')+'" onclick="setPerfilTab(\'badges\')">⭐ Fun Stats</button>'+
     '</div>';
 
   if (perfilTab==='stats') {
