@@ -2140,8 +2140,7 @@ function adminResult(matchId) {
 function adminResetMatch(matchId) {
   const m = matches.find(x => x.id===matchId);
   if (!m) return;
-  if (!confirm('¿Revertir "'+m.homeTeam+' vs '+m.awayTeam+'" a pendiente?
-El resultado volverá a depender de FIFA.')) return;
+  if (!confirm('¿Revertir "'+m.homeTeam+' vs '+m.awayTeam+'" a pendiente?\nEl resultado volverá a depender de FIFA.')) return;
   m.status='upcoming';
   m.homeScore=null;
   m.awayScore=null;
