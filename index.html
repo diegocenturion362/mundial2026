@@ -57,7 +57,7 @@ select { appearance:none; }
 .app-header { background:var(--bg-card); border-bottom:.5px solid var(--border); padding:10px 16px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:100; }
 .header-logo { font-family:var(--fd); font-size:20px; font-weight:700; color:var(--accent); letter-spacing:.05em; }
 .phase-pill { font-size:11px; color:var(--text-m); background:var(--accent-dim); padding:3px 9px; border-radius:20px; }
-.header-player { margin-left:auto; display:flex; align-items:center; gap:8px; cursor:pointer; padding:5px 9px; border-radius:var(--radius-s); transition:background .15s; }
+.header-player { display:flex; align-items:center; gap:8px; cursor:pointer; padding:5px 9px; border-radius:var(--radius-s); transition:background .15s; }
 .header-player:hover { background:var(--accent-dim); }
 .content { padding:16px; flex:1; max-width:520px; width:100%; margin:0 auto; }
 
@@ -206,9 +206,29 @@ select { appearance:none; }
 .live-badge{display:inline-flex;align-items:center;gap:4px;background:var(--live-dim);color:var(--live);border:.5px solid rgba(239,68,68,.3);border-radius:20px;font-size:11px;font-weight:700;padding:2px 8px;letter-spacing:.04em}
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--live);animation:lpulse 1s ease-in-out infinite;flex-shrink:0}
 @keyframes lpulse{0%,100%{opacity:1}50%{opacity:.3}}
-.bet-pts{font-family:var(--fd);font-size:14px;font-weight:700;flex-shrink:0;min-width:60px;text-align:right}
+.bet-pts{font-family:var(--fd);font-size:13px;font-weight:700;flex-shrink:0;min-width:58px;text-align:right}
 .bet-pts.exact{color:var(--accent)}.bet-pts.partial{color:var(--gold)}.bet-pts.wrong{color:var(--danger)}.bet-pts.pending{color:var(--text-m)}
 .risk-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(168,85,247,.15);color:#c084fc;border:.5px solid rgba(168,85,247,.3);border-radius:20px;font-size:10px;font-weight:600;padding:2px 8px}
+.bets-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding:8px 12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border-md);cursor:pointer;font-size:12px;font-weight:500;color:var(--text-m);transition:all .15s;user-select:none}
+.bets-toggle:hover{border-color:var(--accent);color:var(--text)}
+.bets-toggle .toggle-icon{transition:transform .25s;font-size:11px;flex-shrink:0}
+.bets-toggle.open{border-color:var(--accent);color:var(--text)}
+.bets-toggle.open .toggle-icon{transform:rotate(180deg)}
+.bets-panel{display:none;margin-top:6px;border-radius:var(--radius-s);overflow:hidden;border:.5px solid var(--border)}
+.bets-panel.open{display:block}
+.bet-row{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:.5px solid var(--border)}
+.bet-row:last-child{border-bottom:none}
+.bet-row.is-me{background:var(--accent-dim)}
+.bet-score{font-family:var(--fd);font-size:16px;font-weight:700;flex-shrink:0;min-width:38px;text-align:center;letter-spacing:.03em}
+.bet-badge{font-size:12px;flex-shrink:0}
+.mvp-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(245,158,11,.18);color:var(--gold);border:.5px solid rgba(245,158,11,.45);border-radius:20px;font-size:10px;font-weight:700;padding:2px 8px;flex-shrink:0;letter-spacing:.03em}
+.mvp-card{background:linear-gradient(135deg,rgba(245,158,11,.13),rgba(245,158,11,.04));border:.5px solid rgba(245,158,11,.4);border-radius:var(--radius-s);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px}
+.mvp-crown{font-size:26px;flex-shrink:0;line-height:1}
+.mvp-card-info{flex:1;min-width:0}
+.mvp-card-label{font-family:var(--fd);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);opacity:.8;margin-bottom:2px}
+.mvp-card-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mvp-card-sub{font-size:11px;color:var(--text-m);margin-top:1px}
+.mvp-card-pts{font-family:var(--fd);font-size:30px;font-weight:800;color:var(--gold);flex-shrink:0;line-height:1}
 .group-block{margin-bottom:1.25rem}
 .group-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-el);border:.5px solid var(--border);border-radius:var(--radius-s) var(--radius-s) 0 0}
 .group-title{font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:.06em}
@@ -286,6 +306,31 @@ select { appearance:none; }
 .modal-title{font-family:var(--fd);font-size:20px;font-weight:700;letter-spacing:.04em}
 .modal-close{width:30px;height:30px;border-radius:50%;background:var(--bg-el);border:.5px solid var(--border-md);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--text-m)}
 .modal-body{overflow-y:auto;padding:16px;flex:1}
+.modal-tabs{display:flex;overflow-x:auto;padding:10px 16px 0;gap:6px;flex-shrink:0;scrollbar-width:none}
+.modal-tabs::-webkit-scrollbar{display:none}
+.modal-tab{font-family:var(--fd);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:6px 13px;border-radius:20px;border:.5px solid var(--border);background:none;color:var(--text-m);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.modal-tab.active{background:var(--accent);color:#071a0e;border-color:var(--accent)}
+.rules-section{margin-bottom:1.5rem}
+.rules-section-title{font-family:var(--fd);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-m);margin-bottom:10px;padding-bottom:6px;border-bottom:.5px solid var(--border)}
+.pts-table{width:100%;border-collapse:collapse}
+.pts-table td{padding:10px 12px;border-bottom:.5px solid var(--border);font-size:14px;vertical-align:middle}
+.pts-table .pts-val{font-family:var(--fd);font-size:22px;font-weight:800;color:var(--accent);width:52px;text-align:center}
+.pts-table .pts-val.gold{color:var(--gold)}
+.pts-desc{font-size:13px;line-height:1.4}
+.pts-sub{font-size:11px;color:var(--text-m);margin-top:2px}
+.wc-phase-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wc-phase-item{background:var(--bg-el);border:.5px solid var(--border);border-radius:var(--radius-s);padding:10px 12px;display:flex;align-items:center;gap:10px}
+.wc-phase-name{font-size:13px;font-weight:500}
+.wc-phase-detail{font-size:11px;color:var(--text-m);margin-top:2px}
+.example-box{background:var(--bg-el);border:.5px solid var(--border-md);border-radius:var(--radius-s);padding:12px;margin-top:8px}
+.example-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:.5px solid var(--border);font-size:13px}
+.faq-item{margin-bottom:10px;padding:11px 13px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border)}
+.faq-q{font-size:13px;font-weight:600;margin-bottom:5px}
+.faq-a{font-size:12px;color:var(--text-m);line-height:1.6}
+.example-title{font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-m)}
+.example-pts{font-weight:700;font-size:13px}
+.wc-count{font-family:var(--fd);font-size:28px;font-weight:800;color:var(--gold);min-width:36px;text-align:center}
+.wc-info{flex:1}
 </style>
 <!-- ══ FIREBASE SDK ══ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -307,10 +352,13 @@ select { appearance:none; }
   <div class="app-header">
     <span class="header-logo">MUN'26</span>
     <span class="phase-pill" id="header-phase">Mundial 2026</span>
-    <div class="header-player" onclick="changePlayer()" title="Cambiar jugador">
-      <div class="ava" id="header-ava" style="width:28px;height:28px;font-size:11px;"></div>
-      <span id="header-name" style="font-size:13px;font-weight:500;"></span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-m);"><path d="M6 9l6 6 6-6"/></svg>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+      <button onclick="openRules()" title="Reglamento" style="background:var(--accent-dim);border:.5px solid var(--border-md);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex-shrink:0;padding:0;">📋</button>
+      <div class="header-player" onclick="changePlayer()" title="Cambiar jugador">
+        <div class="ava" id="header-ava" style="width:28px;height:28px;font-size:11px;"></div>
+        <span id="header-name" style="font-size:13px;font-weight:500;"></span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-m);"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
     </div>
   </div>
 
@@ -342,6 +390,25 @@ select { appearance:none; }
       <span>Admin</span>
     </button>
   </nav>
+</div>
+
+<!-- ═══════════ RULES MODAL ═══════════ -->
+<div class="modal-overlay" id="rules-modal" onclick="handleModalClick(event)">
+  <div class="modal-sheet">
+    <div class="modal-drag"></div>
+    <div class="modal-header">
+      <span class="modal-title">📋 Reglamento</span>
+      <div class="modal-close" onclick="closeRules()">✕</div>
+    </div>
+    <div class="modal-tabs" id="rules-tabs">
+      <button class="modal-tab active" onclick="switchRulesTab('puntos')">Puntos</button>
+      <button class="modal-tab" onclick="switchRulesTab('comodines')">Comodines</button>
+      <button class="modal-tab" onclick="switchRulesTab('playoffs')">Playoffs</button>
+      <button class="modal-tab" onclick="switchRulesTab('especiales')">Especiales</button>
+      <button class="modal-tab" onclick="switchRulesTab('faq')">FAQ</button>
+    </div>
+    <div class="modal-body" id="rules-body-modal"></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -401,6 +468,8 @@ const DB = {
   savePredictions: v  => DB.set('predictions', v),
   saveWildcards:   v  => DB.set('wildcards', v),
   saveSpecial:     v  => DB.set('special', v),
+  getSnapshots:    ()  => DB.get('rank_snaps', []),
+  saveSnapshots:   v  => DB.set('rank_snaps', v),
 };
 
 // ── Listeners de tiempo real ──
@@ -573,13 +642,15 @@ async function loadFifaMatches({ silent = false } = {}) {
     if (!res.ok) throw new Error(`FIFA: ${res.status}`);
     const data = await res.json();
 
-    // Merge: si hay overrides manuales en caché (status=finished con score), preservarlos
+    // Snapshot de qué partidos estaban finalizados ANTES de actualizar
+    const prevFinished = new Set(matches.filter(m => m.status === 'finished').map(m => m.id));
+
+    // Merge: preservar overrides manuales
     const existing = Object.fromEntries(matches.map(m => [m.id, m]));
     const fresh = (data.Results || [])
       .map(normalizeFifaMatch)
       .sort((a,b) => new Date(a.kickoff) - new Date(b.kickoff));
 
-    // Preservar overrides manuales de admin (si FIFA aún dice upcoming pero admin ya ingresó resultado)
     for (const m of fresh) {
       const ex = existing[m.id];
       if (ex && ex.status === 'finished' && ex.homeScore !== null && m.status !== 'finished') {
@@ -592,17 +663,43 @@ async function loadFifaMatches({ silent = false } = {}) {
 
     matches = fresh;
     saveCachedMatches(matches);
-    fifaSource = `FIFA · ${matches.length} partidos`;
+
+    // Detectar partidos nuevamente finalizados → guardar snapshot automático
+    const newlyFinished = matches.filter(m => m.status === 'finished' && !prevFinished.has(m.id));
+    if (newlyFinished.length > 0) {
+      newlyFinished.forEach(m => {
+        const label = `${m.homeTeam} ${m.homeScore}-${m.awayScore} ${m.awayTeam}`;
+        saveRankSnapshot(m.id, label);
+      });
+      if (silent) toast(`✓ ${newlyFinished.length} resultado${newlyFinished.length>1?'s':''} nuevo${newlyFinished.length>1?'s':''} de FIFA`, 'ok');
+    }
+
+    const hasLive = matches.some(m => m.status === 'live');
+    const now = new Date().toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
+    fifaSource = `FIFA · ${matches.length} partidos · ${now}`;
     if (!silent) toast(`✓ ${matches.length} partidos cargados`, 'ok');
     updateFifaStrip(fifaSource, false);
+    scheduleNextRefresh(hasLive);
     if (currentPlayer) renderView(currentView);
   } catch(err) {
     fifaSource = matches.length ? `Caché · ${matches.length} partidos` : 'FIFA no disponible';
     updateFifaStrip(fifaSource, false);
     if (!silent) toast('No se pudo conectar con FIFA', 'err');
+    scheduleNextRefresh(false);
   } finally {
     fifaLoading = false;
   }
+}
+
+// ── Auto-refresh inteligente ──
+let _refreshTimer = null;
+function scheduleNextRefresh(hasLive) {
+  clearTimeout(_refreshTimer);
+  // 60s si hay partido en vivo, 3min si no
+  const delay = hasLive ? 60_000 : 3 * 60_000;
+  _refreshTimer = setTimeout(() => {
+    if (currentPlayer) loadFifaMatches({ silent: true });
+  }, delay);
 }
 
 function updateFifaStrip(text, loading) {
@@ -901,6 +998,9 @@ function showApp() {
   av.textContent = initials(currentPlayer.name);
   document.getElementById('header-name').textContent = currentPlayer.name;
   navigate('predictions');
+  // Arrancar ciclo de auto-refresh al ingresar
+  const hasLive = matches.some(m => m.status === 'live');
+  scheduleNextRefresh(hasLive);
 }
 
 function navigate(view) {
@@ -1116,6 +1216,20 @@ function provPtsForMatch(playerId, matchId) {
   const wcData = DB.getWildcards()[playerId]||{};
   const isWC = isWCUsed(wcData, m);
   return calcPts(p, m.homeScore, m.awayScore, isWC, m.penWinner);
+}
+
+// Puntos que ganó un jugador en un partido específico (para ranking por jornada)
+function ptsEarnedInMatch(playerId, matchId) {
+  const m = matches.find(x=>x.id===matchId);
+  if (!m || m.status!=='finished') return 0;
+  const p = DB.getPredictions().find(x=>x.playerId===playerId&&x.matchId===matchId);
+  if (!p) return 0;
+  const wcData = DB.getWildcards()[playerId]||{};
+  const isWC = isWCUsed(wcData, m);
+  const base = calcPtsBase(p, m.homeScore, m.awayScore, m.penWinner);
+  const mp = isWC && base>0 ? base*2 : base;
+  const risk = calcRiskBonus(p, m.homeScore, m.awayScore, m.id, DB.getPredictions());
+  return mp + risk;
 }
 
 function betResult(pred, hScore, aScore) {
@@ -1405,6 +1519,32 @@ function renderPerfil(con) {
         '<div class="hist-pts bet-pts '+ptsCls+'">'+(p?'+'+total:'–')+'</div></div>';
     }
     html+='</div>';
+
+    // ── Evolución de posición ──
+    const snapsEv = Array.isArray(DB.getSnapshots()) ? DB.getSnapshots() : [];
+    if (snapsEv.length) {
+      html += '<div class="sec-title" style="margin-top:1rem;">📈 Evolución de posición</div>';
+      html += '<div class="card" style="padding:0 16px;">';
+      snapsEv.forEach((snap, idx) => {
+        const cur  = snap.ranks[currentPlayer.id];
+        if (!cur) return;
+        const prev = idx > 0 ? snapsEv[idx-1].ranks[currentPlayer.id] : null;
+        const diff = prev ? prev.rank - cur.rank : 0;
+        let arrow = '';
+        if      (diff > 0) arrow = `<span style="color:var(--accent);font-weight:700;font-size:12px;">▲${diff}</span>`;
+        else if (diff < 0) arrow = `<span style="color:var(--danger);font-weight:700;font-size:12px;">▼${Math.abs(diff)}</span>`;
+        else if (idx > 0)  arrow = `<span style="color:var(--text-d);font-size:12px;">═</span>`;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:.5px solid var(--border);">
+          <span style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--accent);min-width:32px;">#${cur.rank}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${snap.label}</div>
+            <div style="font-size:11px;color:var(--text-m);">${cur.pts} pts acumulados</div>
+          </div>
+          ${arrow}
+        </div>`;
+      });
+      html += '</div>';
+    }
   }
 
   if (perfilTab==='badges') {
@@ -1666,36 +1806,86 @@ function renderPredictions(con) {
 }
 
 function renderBetsPanel(m) {
-  const playerIds = new Set(DB.getPlayers().map(p => p.id));
-  const preds = DB.getPredictions().filter(p=>p.matchId===m.id && playerIds.has(p.playerId));
-  const players = DB.getPlayers();
-  if (!preds.length) return '<div style="margin-top:8px;font-size:12px;color:var(--text-d);text-align:center;">Nadie apostó aún</div>';
+  const allPreds = DB.getPredictions();
+  const players  = DB.getPlayers();
+  const wcs      = DB.getWildcards();
+  const isLive   = m.status === 'live';
+  const bettors  = players.filter(pl => allPreds.find(p => p.playerId===pl.id && p.matchId===m.id)).length;
+  const label    = isLive
+    ? '👁 Ver apuestas (' + players.length + ') · ⚡ En juego'
+    : '👁 Ver apuestas (' + bettors + ' de ' + players.length + ')';
 
-  let html='<div style="margin-top:10px;border-top:.5px solid var(--border);padding-top:10px;">'+
-    '<div style="font-size:11px;color:var(--text-m);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Apuestas ('+preds.length+')</div>'+
-    '<div style="display:flex;flex-direction:column;gap:5px;">';
+  // ── Filas de cada jugador ──
+  let rowsHTML = '';
+  for (const pl of players) {
+    const pred = allPreds.find(p => p.playerId===pl.id && p.matchId===m.id);
+    const isMe = pl.id === currentPlayer.id;
+    const c    = color(pl.colorIdx);
 
-  for (const pred of preds) {
-    const player = players.find(p=>p.id===pred.playerId)||{name:'?',colorIdx:0};
-    const c = color(player.colorIdx);
-    const isMe = pred.playerId === currentPlayer.id;
-    const wcData = DB.getWildcards()[pred.playerId]||{};
-    const isWC = isWCUsed(wcData, m);
-    let pts = null, res = '';
-    if (m.homeScore !== null) {
-      pts = provPtsForMatch(pred.playerId, m.id);
-      res = betResult(pred, m.homeScore, m.awayScore);
+    if (!pred) {
+      // Sin pronóstico
+      rowsHTML += '<div class="bet-row' + (isMe ? ' is-me' : '') + '">' +
+        '<div class="ava" style="width:26px;height:26px;background:'+c.bg+';color:'+c.tc+';font-size:10px;flex-shrink:0;">'+initials(pl.name)+'</div>' +
+        '<span style="font-size:13px;flex:1;color:var(--text-d);">'+pl.name+'</span>' +
+        '<span style="font-size:11px;color:var(--text-d);font-style:italic;">Sin pronóstico</span>' +
+        '</div>';
+      continue;
     }
-    const ptsCls = res==='exact'?'exact':res==='partial'?'partial':res==='wrong'?'wrong':'pending';
-    html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-el);border-radius:var(--radius-s);'+(isMe?'border:.5px solid rgba(74,222,128,.3);':'')+'">'+
-      '<div class="ava" style="width:24px;height:24px;background:'+c.bg+';color:'+c.tc+';font-size:9px;flex-shrink:0;">'+initials(player.name)+'</div>'+
-      '<span style="font-size:12px;flex:1;">'+(isMe?'<strong>Vos</strong>':player.name)+'</span>'+
-      '<span style="font-family:var(--fd);font-size:14px;font-weight:700;">'+(isWC?'🃏 ':'')+pred.homeScore+'-'+pred.awayScore+'</span>'+
-      (pts!==null?'<span class="bet-pts '+ptsCls+'" style="min-width:40px;">'+ptsLabel(pts,res,isWC)+'</span>':'');
-    html+='</div>';
+
+    const wcData = wcs[pl.id] || {};
+    const isWC   = isWCUsed(wcData, m);
+    // Puntos: exactos para finalizados (incluye risk bonus), provisorios para en vivo
+    const pts    = m.status === 'finished'
+      ? ptsEarnedInMatch(pl.id, m.id)
+      : provPtsForMatch(pl.id, m.id);
+    const risk   = m.status === 'finished'
+      ? calcRiskBonus(pred, m.homeScore, m.awayScore, m.id, allPreds)
+      : 0;
+    const res    = m.homeScore !== null ? betResult(pred, m.homeScore, m.awayScore) : '';
+    const ptsCls = res==='exact' ? 'exact' : res==='partial' ? 'partial' : res==='wrong' ? 'wrong' : 'pending';
+
+    let ptsLbl;
+    if (pts === null || res === '') {
+      ptsLbl = '–';
+    } else if (res === 'exact') {
+      ptsLbl = pts + ' pts 🎯';
+    } else if (res === 'partial') {
+      ptsLbl = pts + ' pt ✓';
+    } else if (res === 'wrong') {
+      ptsLbl = '0 ✗';
+    } else {
+      ptsLbl = pts > 0 ? '+' + pts : '–';
+    }
+
+    rowsHTML += '<div class="bet-row' + (isMe ? ' is-me' : '') + '">' +
+      '<div class="ava" style="width:26px;height:26px;background:'+c.bg+';color:'+c.tc+';font-size:10px;flex-shrink:0;">'+initials(pl.name)+'</div>' +
+      '<span style="font-size:13px;flex:1;' + (isMe ? 'font-weight:600;' : '') + '">' +
+        pl.name + (isMe ? ' <span style="font-size:10px;color:var(--accent);">(vos)</span>' : '') +
+      '</span>' +
+      (isWC  ? '<span class="bet-badge">🃏</span>' : '') +
+      (risk > 0 ? '<span class="risk-badge">🎲+' + risk + '</span>' : '') +
+      '<span class="bet-score">' + pred.homeScore + '-' + pred.awayScore + '</span>' +
+      '<span class="bet-pts ' + ptsCls + '">' + ptsLbl + '</span>' +
+      '</div>';
   }
-  html+='</div>'+renderChatPanel(m.id)+'</div>';
-  return html;
+
+  return '<div class="bets-toggle" id="bt-' + m.id + '" onclick="toggleBets(\'' + m.id + '\')">' +
+      '<span>' + label + '</span>' +
+      '<span class="toggle-icon">▼</span>' +
+    '</div>' +
+    '<div class="bets-panel" id="bp-' + m.id + '">' +
+      rowsHTML +
+      renderChatPanel(m.id) +
+    '</div>';
+}
+
+function toggleBets(matchId) {
+  const toggle = document.getElementById('bt-' + matchId);
+  const panel  = document.getElementById('bp-' + matchId);
+  if (!toggle || !panel) return;
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  toggle.classList.toggle('open', !isOpen);
 }
 
 function activePredictions() {
@@ -1833,10 +2023,121 @@ function saveSpecial(type) {
 // ╔══════════════════════════════════════════════════╗
 // ║  RANKING VIEW                                     ║
 // ╚══════════════════════════════════════════════════╝
+let rankingView = 'general'; // 'general' | day string (toDateString)
+
+// MVP por jornada: calcula quién lideró cada día
+function getMvpData() {
+  const jornadasMap = {};
+  for (const m of matches.filter(x => x.status === 'finished')) {
+    const day = new Date(m.kickoff||m.date).toDateString();
+    jornadasMap[day] = true;
+  }
+  const sortedDays = Object.keys(jornadasMap).sort((a, b) => new Date(a) - new Date(b));
+
+  const mvpCounts  = {}; // playerId → cantidad de jornadas MVP
+  const mvpHistory = []; // [{day, winners, pts, jNum}]
+
+  sortedDays.forEach((day, i) => {
+    const scores = scoresByJornada(day).filter(p => p.pts > 0);
+    if (!scores.length) return;
+    const topPts   = scores[0].pts;
+    const winners  = scores.filter(p => p.pts === topPts);
+    winners.forEach(w => { mvpCounts[w.id] = (mvpCounts[w.id] || 0) + 1; });
+    mvpHistory.push({ day, winners, pts: topPts, jNum: i + 1 });
+  });
+
+  const lastMvp = mvpHistory.length ? mvpHistory[mvpHistory.length - 1] : null;
+  return { mvpCounts, lastMvp };
+}
+
+// Puntuación por jornada (agrupar por día)
+function scoresByJornada(jornadaKey) {
+  const dayMatches = matches.filter(m => {
+    const day = new Date(m.kickoff||m.date).toDateString();
+    return m.status==='finished' && day===jornadaKey;
+  });
+  return DB.getPlayers().map(p => ({
+    ...p,
+    pts: dayMatches.reduce((sum, m) => sum + ptsEarnedInMatch(p.id, m.id), 0),
+    games: dayMatches.filter(m => DB.getPredictions().find(x => x.playerId===p.id && x.matchId===m.id)).length,
+  })).sort((a, b) => b.pts - a.pts);
+}
+
+function setRankingView(v) { rankingView = v; renderView('ranking'); }
+
 function renderRanking(con) {
   const scores = allScores();
   if (!scores.length) {
     con.innerHTML='<div class="empty"><div class="empty-icon">👥</div><p>Aún no hay jugadores registrados.</p></div>'; return;
+  }
+
+  // Construir lista de jornadas (días con partidos finalizados)
+  const jornadasMap = {};
+  for (const m of matches.filter(x => x.status === 'finished')) {
+    const day = new Date(m.kickoff||m.date).toDateString();
+    jornadasMap[day] = (jornadasMap[day] || 0) + 1;
+  }
+  const jornadas = Object.keys(jornadasMap);
+
+  // Tabs de jornada
+  let tabsHTML = '<div class="jornada-tabs"><button class="jornada-tab' +
+    (rankingView==='general' ? ' active' : '') +
+    '" onclick="setRankingView(\'general\')">📊 General</button>';
+  jornadas.forEach((day, i) => {
+    tabsHTML += '<button class="jornada-tab' + (rankingView===day ? ' active' : '') +
+      '" onclick="setRankingView(\'' + day + '\')">Jornada ' + (i+1) + '</button>';
+  });
+  tabsHTML += '</div>';
+
+  // Datos MVP (usado en ambas vistas)
+  const { mvpCounts, lastMvp } = getMvpData();
+
+  // ── VISTA JORNADA ──
+  if (rankingView !== 'general') {
+    const jScores    = scoresByJornada(rankingView).filter(p => p.games > 0 || p.pts > 0);
+    const dayMatches = matches.filter(m => new Date(m.kickoff||m.date).toDateString() === rankingView && m.status === 'finished');
+    const matchSummary = dayMatches.map(m => m.homeTeam+' '+m.homeScore+'-'+m.awayScore+' '+m.awayTeam).join(' · ');
+    const jTopPts    = jScores.length ? jScores[0].pts : -1;
+    let rowsHTML = '';
+    jScores.forEach((p, i) => {
+      const isMe    = p.id === currentPlayer.id;
+      const isMvp   = p.pts > 0 && p.pts === jTopPts;
+      const ptColor = p.pts > 0 ? 'var(--accent)' : p.pts < 0 ? 'var(--danger)' : 'var(--text-d)';
+      rowsHTML += '<div class="rank-row' + (isMe ? ' me' : '') + '">' +
+        '<span class="rank-num">' + (i+1) + '</span>' +
+        avaEl(p, 32) +
+        '<div class="rank-info">' +
+          '<div class="rank-name">' + p.name + (isMe ? ' <span style="font-size:10px;color:var(--accent);">· vos</span>' : '') + '</div>' +
+          '<div class="rank-stats">' + p.games + ' partido' + (p.games!==1?'s':'') + ' apostados</div>' +
+        '</div>' +
+        (isMvp ? '<span class="mvp-badge">🏅 MVP</span>' : '') +
+        '<span class="rank-pts" style="color:' + ptColor + ';">' + (p.pts>0?'+':'') + p.pts + '</span>' +
+        '</div>';
+    });
+    if (!jScores.length) rowsHTML = '<div style="padding:16px;text-align:center;color:var(--text-d);font-size:13px;">Nadie apostó en esta jornada</div>';
+    con.innerHTML = tabsHTML +
+      '<div style="font-size:12px;color:var(--text-m);margin:8px 0 10px;">' + matchSummary + '</div>' +
+      '<div class="card" style="padding:0 16px;">' + rowsHTML + '</div>';
+    return;
+  }
+
+  // ── VISTA GENERAL ──
+
+  // Card MVP de la última jornada
+  let mvpCardHTML = '';
+  if (lastMvp) {
+    const winnerNames = lastMvp.winners.map(w => w.name).join(' & ');
+    const isTie       = lastMvp.winners.length > 1;
+    const isMe        = lastMvp.winners.some(w => w.id === currentPlayer.id);
+    mvpCardHTML = '<div class="mvp-card">' +
+      '<div class="mvp-crown">🏅</div>' +
+      '<div class="mvp-card-info">' +
+        '<div class="mvp-card-label">MVP · Jornada ' + lastMvp.jNum + '</div>' +
+        '<div class="mvp-card-name">' + winnerNames + (isMe ? ' <span style="font-size:11px;color:var(--accent);">(vos 🎉)</span>' : '') + '</div>' +
+        '<div class="mvp-card-sub">' + (isTie ? 'Empate en ' : '') + lastMvp.pts + ' pts este día</div>' +
+      '</div>' +
+      '<div class="mvp-card-pts">+' + lastMvp.pts + '</div>' +
+      '</div>';
   }
 
   let podHTML = '<div class="podium-wrap">';
@@ -1850,36 +2151,51 @@ function renderRanking(con) {
     const c    = color(p.colorIdx);
     const ci   = scores.length>=2 ? i : 0;
     const ptsC = pColors[ci] || 'var(--text)';
-    podHTML += `<div class="podium-col">
-      <div class="podium-ava" style="background:${c.bg};color:${c.tc};border:2px solid ${ptsC};">${initials(p.name)}</div>
-      <div class="podium-block ${pbClass[ci]||'pb1'}">
-        <span style="font-size:${ci===1?'22':'16'}px;margin-bottom:2px;">${medals[ci]}</span>
-        <span class="podium-pts" style="color:${ptsC};">${p.pts}</span>
-      </div>
-      <div class="podium-name">${p.name}</div>
-    </div>`;
+    podHTML += '<div class="podium-col">' +
+      '<div class="podium-ava" style="background:'+c.bg+';color:'+c.tc+';border:2px solid '+ptsC+';">'+initials(p.name)+'</div>' +
+      '<div class="podium-block '+(pbClass[ci]||'pb1')+'">' +
+        '<span style="font-size:'+(ci===1?'22':'16')+'px;margin-bottom:2px;">'+medals[ci]+'</span>' +
+        '<span class="podium-pts" style="color:'+ptsC+';">'+p.pts+'</span>' +
+      '</div>' +
+      '<div class="podium-name">'+p.name+'</div>' +
+      '</div>';
   });
   podHTML += '</div>';
 
+  // Snapshot anterior para calcular cambios de posición
+  const snaps = Array.isArray(DB.getSnapshots()) ? DB.getSnapshots() : [];
+  const prevSnap = snaps.length >= 2 ? snaps[snaps.length - 2] : null;
   const goldColors = ['var(--gold)','var(--silver)','var(--bronze)'];
+
   let tableHTML = '<div class="card" style="padding:0 16px;">';
   scores.forEach((p,i) => {
-    const c    = color(p.colorIdx);
-    const isMe = p.id===currentPlayer.id;
-    tableHTML += `<div class="rank-row${isMe?' me':''}">
-      <span class="rank-num" style="color:${i<3?goldColors[i]:'var(--text-d)'};">${i+1}</span>
-      ${avaEl(p,36)}
-      <div class="rank-info">
-        <div class="rank-name">${p.name}${isMe?' <span style="font-size:10px;color:var(--accent);">· vos</span>':''}</div>
-        <div class="rank-stats">🎯 ${p.exact} exactos &nbsp;✓ ${p.partial} parciales</div>
-      </div>
-      ${p.curStreak>=2 ? `<span class="streak-badge">🔥 ${p.curStreak}</span>` : ''}
-      <span class="rank-pts">${p.pts}</span>
-    </div>`;
+    const isMe    = p.id === currentPlayer.id;
+    const curRank = i + 1;
+    const myMvps  = mvpCounts[p.id] || 0;
+    let deltaHTML = '';
+    if (prevSnap && prevSnap.ranks && prevSnap.ranks[p.id]) {
+      const prevRank = prevSnap.ranks[p.id].rank;
+      const diff = prevRank - curRank;
+      if (diff > 0)      deltaHTML = '<span style="font-size:11px;color:var(--accent);font-weight:700;">▲'+diff+'</span>';
+      else if (diff < 0) deltaHTML = '<span style="font-size:11px;color:var(--danger);font-weight:700;">▼'+Math.abs(diff)+'</span>';
+      else               deltaHTML = '<span style="font-size:11px;color:var(--text-d);">═</span>';
+    }
+    tableHTML += '<div class="rank-row'+(isMe?' me':'')+'">'+
+      '<span class="rank-num" style="color:'+(i<3?goldColors[i]:'var(--text-d)')+';">'+curRank+'</span>'+
+      avaEl(p,36)+
+      '<div class="rank-info">'+
+        '<div class="rank-name">'+p.name+(isMe?' <span style="font-size:10px;color:var(--accent);">· vos</span>':'')+'</div>'+
+        '<div class="rank-stats">🎯 '+p.exact+' exactos &nbsp;✓ '+p.partial+' parciales</div>'+
+      '</div>'+
+      deltaHTML+
+      (myMvps > 0 ? '<span class="mvp-badge">🏅 ×'+myMvps+'</span>' : '')+
+      (p.curStreak>=2 ? '<span class="streak-badge">🔥 '+p.curStreak+'</span>' : '')+
+      '<span class="rank-pts">'+p.pts+'</span>'+
+      '</div>';
   });
   tableHTML += '</div>';
 
-  con.innerHTML = podHTML + tableHTML;
+  con.innerHTML = tabsHTML + mvpCardHTML + podHTML + tableHTML;
 }
 
 // ╔══════════════════════════════════════════════════╗
@@ -2124,6 +2440,16 @@ function authAdmin() {
   } else { toast('Contraseña incorrecta','err'); }
 }
 
+function saveRankSnapshot(matchId, matchLabel) {
+  const scores = allScores();
+  const snap = { matchId, label: matchLabel, ts: Date.now(), ranks: {} };
+  scores.forEach((p, i) => { snap.ranks[p.id] = { rank: i + 1, pts: p.pts }; });
+  const snaps = Array.isArray(DB.getSnapshots()) ? DB.getSnapshots() : [];
+  const updated = snaps.filter(s => s.matchId !== matchId);
+  updated.push(snap);
+  DB.saveSnapshots(updated);
+}
+
 function adminResult(matchId) {
   const h = document.getElementById('rh-'+matchId).value;
   const a = document.getElementById('ra-'+matchId).value;
@@ -2133,8 +2459,9 @@ function adminResult(matchId) {
   m.status='finished';
   m.homeScore=parseInt(h);
   m.awayScore=parseInt(a);
-  m.manualOverride=true; // marca que este resultado es manual, no de FIFA
+  m.manualOverride=true;
   saveCachedMatches(matches);
+  saveRankSnapshot(matchId, m.homeTeam+' '+h+'-'+a+' '+m.awayTeam);
   toast(m.homeTeam+' '+h+' – '+a+' '+m.awayTeam+' ✓','ok');
   renderView('admin');
 }
@@ -2349,6 +2676,296 @@ function clearAll() {
   // 6. Obtener datos frescos de FIFA en segundo plano
   loadFifaMatches({ silent: true });
 })();
+
+// ╔══════════════════════════════════════════════════╗
+// ║  RULES MODAL                                      ║
+// ╚══════════════════════════════════════════════════╝
+let currentRulesTab = 'puntos';
+
+function openRules() {
+  document.getElementById('rules-modal').classList.add('open');
+  switchRulesTab('puntos');
+}
+function closeRules() {
+  document.getElementById('rules-modal').classList.remove('open');
+}
+function handleModalClick(e) {
+  if (e.target === document.getElementById('rules-modal')) closeRules();
+}
+function switchRulesTab(tab) {
+  currentRulesTab = tab;
+  document.querySelectorAll('.modal-tab').forEach(b => b.classList.remove('active'));
+  const tabNames = ['puntos','comodines','playoffs','especiales','faq'];
+  const tabs = document.querySelectorAll('.modal-tab');
+  const idx = tabNames.indexOf(tab);
+  if (tabs[idx]) tabs[idx].classList.add('active');
+  document.getElementById('rules-body-modal').innerHTML = getRulesContent(tab);
+}
+
+function getRulesContent(tab) {
+  if (tab === 'puntos') return `
+    <div class="rules-section">
+      <div class="rules-section-title">Sistema de puntuación</div>
+      <table class="pts-table">
+        <tr>
+          <td class="pts-val">5</td>
+          <td><div class="pts-desc"><strong>Resultado exacto</strong></div>
+              <div class="pts-sub">Acertás el marcador preciso · ej: apostás 2-1 y sale 2-1</div></td>
+        </tr>
+        <tr>
+          <td class="pts-val">3</td>
+          <td><div class="pts-desc"><strong>Ganador o empate correcto</strong></div>
+              <div class="pts-sub">Acertás quién gana o que termina en empate, pero el marcador es distinto</div></td>
+        </tr>
+        <tr>
+          <td class="pts-val" style="color:var(--gold);">+1</td>
+          <td><div class="pts-desc"><strong>Bonus: diferencia de goles</strong></div>
+              <div class="pts-sub">Si acertás el ganador Y la diferencia exacta · ej: apostás 3-1 y sale 2-0 → ambos ganan por 2, sumás 3+1=4 pts</div></td>
+        </tr>
+        <tr>
+          <td class="pts-val" style="color:var(--gold);">×2</td>
+          <td><div class="pts-desc"><strong>Comodín activado</strong></div>
+              <div class="pts-sub">Duplica todos los puntos de ese partido. Si hacés 3, cobrás 6. Si hacés 0, no cambia nada.</div></td>
+        </tr>
+        <tr>
+          <td class="pts-val" style="color:var(--danger);">0</td>
+          <td><div class="pts-desc"><strong>Resultado incorrecto</strong></div>
+              <div class="pts-sub">No acertás ganador ni empate</div></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Ejemplos prácticos</div>
+      <div class="example-box">
+        <div class="example-title">Partido: Argentina 2 - Francia 1</div>
+        <div class="example-row">
+          <span>Apostás 2-1 (exacto)</span>
+          <span class="example-pts" style="color:var(--accent);">5 pts</span>
+        </div>
+        <div class="example-row">
+          <span>Apostás 3-0 (gana ARG, dif. incorrecta)</span>
+          <span class="example-pts" style="color:var(--gold);">3 pts</span>
+        </div>
+        <div class="example-row">
+          <span>Apostás 1-0 (gana ARG, dif. correcta +1)</span>
+          <span class="example-pts" style="color:var(--gold);">4 pts</span>
+        </div>
+        <div class="example-row">
+          <span>Apostás 1-1 (empate incorrecto)</span>
+          <span class="example-pts" style="color:var(--danger);">0 pts</span>
+        </div>
+        <div class="example-row" style="border-bottom:none;">
+          <span>Apostás 2-1 con comodín activado</span>
+          <span class="example-pts" style="color:var(--accent);">10 pts 🃏</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Desempate en el ranking</div>
+      <div style="font-size:13px;color:var(--text-m);line-height:1.7;">
+        1. Mayor cantidad de puntos<br>
+        2. Mayor cantidad de resultados exactos<br>
+        3. Mayor cantidad de aciertos parciales
+      </div>
+    </div>`;
+
+  if (tab === 'comodines') return `
+    <div class="rules-section">
+      <div class="rules-section-title">¿Qué es el comodín?</div>
+      <p style="font-size:13px;color:var(--text-m);line-height:1.6;margin-bottom:12px;">
+        El comodín <strong style="color:var(--text);">duplica los puntos</strong> que ganás en un partido. Si acertás 3 pts, cobrás 6. Si acertás 5 pts, cobrás 10. Si perdés (0 pts), el comodín no hace nada — no se desperdicia, pero se descuenta igual.
+      </p>
+      <p style="font-size:12px;color:var(--text-m);line-height:1.5;padding:10px 12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border-md);">
+        ⚠️ El comodín se asigna <strong>antes</strong> del inicio del partido. Una vez que arranca no se puede cambiar.
+      </p>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Comodines disponibles por fase</div>
+      <div class="wc-phase-grid">
+        <div class="wc-phase-item">
+          <span class="wc-count">1</span>
+          <div class="wc-info">
+            <div class="wc-phase-name">Por grupo</div>
+            <div class="wc-phase-detail">Grupos A · B · C · ... · L<br>1 comodín por cada grupo = 12 en total</div>
+          </div>
+        </div>
+        <div class="wc-phase-item">
+          <span class="wc-count">2</span>
+          <div class="wc-info">
+            <div class="wc-phase-name">16vos de Final</div>
+            <div class="wc-phase-detail">2 comodines para repartir entre los 16 partidos</div>
+          </div>
+        </div>
+        <div class="wc-phase-item">
+          <span class="wc-count">2</span>
+          <div class="wc-info">
+            <div class="wc-phase-name">8vos de Final</div>
+            <div class="wc-phase-detail">2 comodines para los 8 partidos</div>
+          </div>
+        </div>
+        <div class="wc-phase-item">
+          <span class="wc-count">1</span>
+          <div class="wc-info">
+            <div class="wc-phase-name">Cuartos de Final</div>
+            <div class="wc-phase-detail">1 comodín para los 4 partidos</div>
+          </div>
+        </div>
+        <div class="wc-phase-item">
+          <span class="wc-count">1</span>
+          <div class="wc-info">
+            <div class="wc-phase-name">Semifinales</div>
+            <div class="wc-phase-detail">1 comodín para 2 partidos</div>
+          </div>
+        </div>
+        <div class="wc-phase-item">
+          <span class="wc-count">1</span>
+          <div class="wc-info">
+            <div class="wc-phase-name">Final + 3er Puesto</div>
+            <div class="wc-phase-detail">1 comodín en total para estos 2 partidos</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Estrategia sugerida</div>
+      <div style="font-size:13px;color:var(--text-m);line-height:1.7;">
+        🎯 Usalo en partidos donde estás muy seguro del resultado exacto — un comodín en un exacto vale 10 pts.<br><br>
+        ⚡ En playoffs, el comodín multiplica también el bonus de penales, por lo que el techo sube aún más.<br><br>
+        🃏 En grupos, guardate el comodín para los partidos de la última jornada — cuando ya sabés más sobre los equipos.
+      </div>
+    </div>`;
+
+  if (tab === 'playoffs') return `
+    <div class="rules-section">
+      <div class="rules-section-title">¿Cómo funcionan los playoffs?</div>
+      <p style="font-size:13px;color:var(--text-m);line-height:1.6;">
+        A partir de 16vos de Final, el sistema cambia ligeramente respecto a la fase de grupos.
+      </p>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Resultado válido</div>
+      <div style="padding:12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border-md);margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:500;margin-bottom:6px;">⏱ 90 minutos + tiempo adicionado + alargue</div>
+        <div style="font-size:12px;color:var(--text-m);line-height:1.5;">
+          El resultado que vale para tus puntos es el marcador al final del alargue (si lo hay). Las tandas de penales no cambian el marcador oficial.
+        </div>
+      </div>
+      <div style="padding:12px;background:rgba(239,68,68,.08);border-radius:var(--radius-s);border:.5px solid rgba(239,68,68,.25);">
+        <div style="font-size:13px;font-weight:500;color:var(--danger);margin-bottom:6px;">⚠️ Los penales NO cuentan en el marcador</div>
+        <div style="font-size:12px;color:var(--text-m);line-height:1.5;">
+          Si apostás 1-1 y el partido termina 1-1 (con Brasil ganando penales), tu pronóstico es <strong style="color:var(--accent);">exacto (5 pts)</strong>, independientemente de quién ganó por penales.
+        </div>
+      </div>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Bonus por penales <span style="color:var(--gold);">+1 pt</span></div>
+      <p style="font-size:13px;color:var(--text-m);line-height:1.6;margin-bottom:10px;">
+        Si el partido llega a penales, podés sumar <strong style="color:var(--gold);">1 punto extra</strong> si acertás qué equipo gana la tanda.
+      </p>
+      <div class="example-box">
+        <div class="example-title">Partido de 16vos: Brasil 1 - España 1 (Brasil gana en penales)</div>
+        <div class="example-row">
+          <span>Apostás 1-1 + Brasil gana penales</span>
+          <span class="example-pts" style="color:var(--accent);">5+1 = 6 pts</span>
+        </div>
+        <div class="example-row">
+          <span>Apostás 1-1 + España gana penales</span>
+          <span class="example-pts" style="color:var(--accent);">5 pts</span>
+        </div>
+        <div class="example-row">
+          <span>Apostás 2-0 (ganador correcto, no exacto)</span>
+          <span class="example-pts" style="color:var(--gold);">3 pts</span>
+        </div>
+        <div class="example-row" style="border-bottom:none;">
+          <span>Apostás 1-1 con comodín + Brasil penales</span>
+          <span class="example-pts" style="color:var(--accent);">12 pts 🃏</span>
+        </div>
+      </div>
+    </div>`;
+
+  if (tab === 'especiales') return `
+    <div class="rules-section">
+      <div class="rules-section-title">Pronósticos especiales</div>
+      <p style="font-size:13px;color:var(--text-m);line-height:1.6;margin-bottom:14px;">
+        Antes de que empiece el torneo podés apostar por el campeón y el goleador. Estos pronósticos se <strong style="color:var(--text);">bloquean definitivamente</strong> cuando comienza el primer partido.
+      </p>
+      <table class="pts-table">
+        <tr>
+          <td class="pts-val gold">+15</td>
+          <td>
+            <div class="pts-desc"><strong>🥇 Campeón del Mundial</strong></div>
+            <div class="pts-sub">Acertás qué selección levanta la copa. Solo hay una respuesta correcta.</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="pts-val gold">+10</td>
+          <td>
+            <div class="pts-desc"><strong>⚽ Goleador del torneo</strong></div>
+            <div class="pts-sub">Acertás el jugador con más goles al final del Mundial.</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Cuándo se suman estos puntos</div>
+      <p style="font-size:13px;color:var(--text-m);line-height:1.6;">
+        El organizador carga el campeón y el goleador al final del torneo. Los puntos se suman automáticamente a todos los que lo hayan acertado.
+      </p>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">⚠️ Importante</div>
+      <div style="font-size:13px;color:var(--text-m);line-height:1.7;">
+        ✗ No podés cambiar estos pronósticos una vez confirmados<br>
+        ✗ Si no los cargás antes del primer partido, perdés esos puntos<br>
+        ✓ Son anónimos hasta que el torneo termine<br>
+        ✓ Los puntos son independientes de los comodines
+      </div>
+    </div>`;
+
+  if (tab === 'faq') return `
+    <div class="faq-item">
+      <div class="faq-q">¿Cuándo se bloquean mis pronósticos?</div>
+      <div class="faq-a">Exactamente al momento en que arranca el partido. El sistema usa el horario oficial del partido y cierra la ventana automáticamente.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Puedo cambiar mi pronóstico antes de que empiece?</div>
+      <div class="faq-a">Sí. Mientras el partido esté "próximo" podés entrar y modificar el marcador tantas veces como quieras. Solo el último que guardaste es el que cuenta.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cuándo puedo ver las apuestas de los demás?</div>
+      <div class="faq-a">Solo cuando el partido ya arrancó (estado "en juego") o terminó. Antes del inicio solo ves las tendencias globales (% local / empate / visitante), pero no quién apostó qué.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Puedo recuperar un comodín que activé por error?</div>
+      <div class="faq-a">Sí, podés quitarlo mientras el partido no haya empezado. Una vez que arranca, el comodín queda bloqueado junto con el pronóstico.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Qué pasa si no aposté en un partido?</div>
+      <div class="faq-a">Simplemente no sumás ni restás nada. No hay penalización por no apostar, pero perdés la oportunidad de sumar puntos.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cómo se calcula el ranking cuando hay partidos en vivo?</div>
+      <div class="faq-a">El ranking muestra los puntos confirmados (partidos terminados) más los puntos provisorios del marcador actual en curso. Estos últimos pueden cambiar con cada gol.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿En qué casos el comodín no sirve de nada?</div>
+      <div class="faq-a">Si tu pronóstico es incorrecto (0 pts), el comodín no cambia nada. Solo multiplica si ya ganaste algún punto.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Qué significa "bonus diferencia de goles"?</div>
+      <div class="faq-a">Si acertás el ganador Y la diferencia entre los goles es la misma que tu pronóstico, sumás +1 extra. Ej: apostás 3-1 y sale 2-0 → ambos ganan por 2 → 3+1 = 4 pts.</div>
+    </div>`;
+
+  return '';
+}
 </script>
 </body>
 </html>
