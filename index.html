@@ -681,21 +681,18 @@ function renderLoginScreen() {
   const players = DB.getPlayers();
   // Solo mostrar los chips si hay pocos jugadores (≤8) para no hacer la pantalla enorme
   // Con "Recordarme", la mayoría entra automático y no llega a ver esta lista
-  // Construir chips sin template literals anidados para evitar errores de parseo
-  let chips = '';
-  if (players.length > 0 && players.length <= 8) {
-    let chipItems = '';
-    players.forEach(p => {
-      const c = color(p.colorIdx);
-      chipItems += '<div class="player-chip" onclick="quickLogin(\''+p.id+'\')">'+
-        '<div class="ava" style="width:28px;height:28px;background:'+c.bg+';color:'+c.tc+';font-size:10px;">'+initials(p.name)+'</div>'+
-        '<span>'+p.name+'</span></div>';
-    });
-    chips = '<div class="login-divider">¿Ya jugás? Seleccioná tu nombre</div>'+
-            '<div class="player-chips">'+chipItems+'</div>';
-  } else if (players.length > 8) {
-    chips = '<div class="login-divider">¿Ya jugás? Ingresá tu nombre y PIN</div>';
-  }
+  const chips = players.length && players.length <= 8 ? `
+    <div class="login-divider">¿Ya jugás? Seleccioná tu nombre</div>
+    <div class="player-chips">
+      ${players.map(p => {
+        const c = color(p.colorIdx);
+        return \`<div class="player-chip" onclick="quickLogin('${p.id}')">
+          <div class="ava" style="width:28px;height:28px;background:\${c.bg};color:\${c.tc};font-size:10px;">\${initials(p.name)}</div>
+          <span>\${p.name}</span>
+        </div>\`;
+      }).join('')}
+    </div>` : players.length > 8 ? `
+    <div class="login-divider">¿Ya jugás? Ingresá tu nombre y PIN</div>` : '';
 
   return `
     <div style="text-align:center;">
