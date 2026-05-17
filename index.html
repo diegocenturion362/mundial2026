@@ -1508,7 +1508,7 @@ function calcGroupStandings(groupLetter, groupTeams) {
 
 function renderFlagSm(code, name) {
   if (!code) return '<span style="font-size:12px;color:var(--text-m);">'+( name?name.slice(0,3).toUpperCase():'?')+'</span>';
-  return '<span class="team-flag-sm"><img src="https://api.fifa.com/api/v3/picture/flags-sq-2/'+code+'" alt="'+name+'" onerror="this.style.display='none'"></span>';
+  return '<span class="team-flag-sm"><img src="https://api.fifa.com/api/v3/picture/flags-sq-2/'+code+'" alt="'+name+'" onerror="this.style.display=\'none\'"></span>';
 }
 
 // ── Reglamento collapsible (se usa en renderPredictions) ──
