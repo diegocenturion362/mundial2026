@@ -1651,7 +1651,7 @@ function renderPredictions(con) {
               : pred!=null
                 ? `<button class="btn-save editing" id="sv-${m.id}" onclick="savePred('${m.id}')">✏️ Actualizar</button>`
                 : `<button class="btn-save" id="sv-${m.id}" onclick="savePred('${m.id}')">Guardar</button>`}
-            ${!closed && canUseWC(wcData, m) ? `<button class="btn-wc ${isWC?'active':''}" onclick="toggleWC('${m.id}')" title="Comodín: duplica tus puntos">🃏${isWC?' ✓':''}</button>` : ''}
+
           </div>
         </div>
         ${!closed ? renderTrends(m.id) : ''}
