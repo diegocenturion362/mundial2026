@@ -2288,15 +2288,15 @@ function clearAll() {
   try {
     await initFirebase();
   } catch(e) {
-    selEl.innerHTML = `
-      <div style="text-align:center;padding:2rem;max-width:340px;">
-        <div style="font-size:40px;">🔌</div>
-        <div style="font-size:16px;font-weight:600;margin-top:1rem;color:#f87171;">Sin conexión</div>
-        <div style="font-size:13px;color:#7a9e82;margin-top:.5rem;line-height:1.6;">
-          No se pudo conectar a Firebase.<br>Verificá tu conexión a internet y recargá la página.
-        </div>
-        <button onclick="location.reload()" style="margin-top:1.5rem;padding:10px 20px;background:#4ade80;color:#0e1a10;border:none;border-radius:8px;font-weight:700;cursor:pointer;">🔄 Reintentar</button>
-      </div>`;
+    console.error('Firebase init error:', e);
+    selEl.innerHTML = '<div style="text-align:center;padding:2rem;max-width:340px;">'+
+      '<div style="font-size:40px;">🔌</div>'+
+      '<div style="font-size:16px;font-weight:600;margin-top:1rem;color:#f87171;">Sin conexión</div>'+
+      '<div style="font-size:13px;color:#7a9e82;margin-top:.5rem;line-height:1.6;">'+
+      'No se pudo conectar a Firebase.<br>Error: '+String(e.message||e)+
+      '</div>'+
+      '<button onclick="location.reload()" style="margin-top:1.5rem;padding:10px 20px;background:#4ade80;color:#0e1a10;border:none;border-radius:8px;font-weight:700;cursor:pointer;">🔄 Reintentar</button>'+
+      '</div>';
     return;
   }
 
@@ -2314,7 +2314,16 @@ function clearAll() {
   fifaSource = matches.length ? `Caché · ${matches.length} partidos` : 'Sin datos';
 
   // 4. Restaurar HTML del player-select
-  selEl.innerHTML = renderLoginScreen();
+  try {
+    selEl.innerHTML = renderLoginScreen();
+  } catch(e) {
+    console.error('renderLoginScreen error:', e);
+    selEl.innerHTML = '<div style="text-align:center;padding:2rem;"><div style="font-size:52px;">⚽</div>'+
+      '<div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:1rem;">MUNDIAL 2026</div>'+
+      '<div style="font-size:12px;color:#f87171;margin-top:.5rem;">Error al cargar pantalla: '+String(e.message||e)+'</div>'+
+      '<button onclick="location.reload()" style="margin-top:1rem;padding:10px 20px;background:#4ade80;color:#0e1a10;border:none;border-radius:8px;font-weight:700;cursor:pointer;">🔄 Recargar</button>'+
+      '</div>';
+  }
 
   // 5. Restaurar sesión — primero sessionStorage (pestaña actual), luego localStorage (recordarme)
   let autoLogged = false;
