@@ -1068,7 +1068,7 @@ const ACHIEVEMENTS = [
   {id:'leader',      icon:'👑', title:'Líder',           desc:'Llegaste al primer puesto',             check:(s,r)=>r===1},
   {id:'no_blank',    icon:'💪', title:'Comprometido',    desc:'Pronosticaste 10+ partidos',            check:(s,r)=>s.totalPreds>=10},
   {id:'champion_ok', icon:'🏅', title:'El que sabe',     desc:'Acertaste el campeón del Mundial',      check:(s,r)=>s.championOk},
-  {id:'valiente',    icon:'🦁', title:'El Valiente',     desc:'Apostaste solo vos por una sorpresa',   check:(s,r)=>s.soloSurprise>=1},
+  {id:'valiente',    icon:'🦁', title:'El Valiente',     desc:'Fuiste el único que sumó puntos en un partido',   check:(s,r)=>s.soloSurprise>=1},
   {id:'conservador', icon:'🐢', title:'El Conservador',  desc:'3+ veces apostaste 1-0, 2-1 ó 1-1',    check:(s,r)=>s.conservador>=3},
   {id:'pleno_grupo', icon:'⭐', title:'Pleno de Grupo',  desc:'Acertaste todos los ganadores de una jornada', check:(s,r)=>s.plenoGrupo>=1},
   {id:'batacazo',    icon:'💥', title:'Batacazo',        desc:'Acertaste un resultado inesperado (solo vos)', check:(s,r)=>s.soloSurprise>=1},
@@ -1191,9 +1191,10 @@ function scorePlayer(playerId) {
     if (isWC && mp>0) { mp*=2; wildcardWin=true; }
     const risk  = rawBase>0 ? calcRiskBonus(p, m.homeScore, m.awayScore, m.id, activePreds) : 0;
     let total = mp + risk;
-    if (total>0) {
+    if (rawBase>0 && total>0) {
       const onMatch = activePreds.filter(x=>x.matchId===m.id);
-      if (onMatch.length===1 && onMatch[0].playerId===playerId) total*=2;
+      const soloScorer = onMatch.filter(x=>calcPtsBase(x,m.homeScore,m.awayScore)>0).length===1;
+      if (soloScorer) total*=2;
     }
     if (rawBase===5) { exact++; curStreak++; }
     else if (rawBase>=3) { partial++; curStreak++; }
@@ -1249,7 +1250,8 @@ function provPtsForMatch(playerId, matchId) {
   let pts = calcPts(p, m.homeScore, m.awayScore, isWC, m.phase, m.penWinner);
   if (pts > 0) {
     const onMatch = activePredictions().filter(x=>x.matchId===matchId);
-    if (onMatch.length===1 && onMatch[0].playerId===playerId) pts*=2;
+    const soloScorer = onMatch.filter(x=>calcPtsBase(x,m.homeScore,m.awayScore)>0).length===1;
+    if (soloScorer) pts*=2;
   }
   return pts;
 }
@@ -1268,7 +1270,8 @@ function ptsEarnedInMatch(playerId, matchId) {
   if (total > 0) {
     const allActive = activePredictions();
     const onMatch = allActive.filter(x=>x.matchId===matchId);
-    if (onMatch.length===1 && onMatch[0].playerId===playerId) total *= 2;
+    const soloScorer = onMatch.filter(x=>calcPtsBase(x,m.homeScore,m.awayScore)>0).length===1;
+    if (soloScorer) total *= 2;
   }
   return total;
 }
@@ -1588,14 +1591,10 @@ function renderPerfil(con) {
   if (perfilTab==='badges') {
     const CONSERVATIVE=['1-0','2-1','1-1','0-0','2-0'];
     const conservCount=myPreds.filter(p=>CONSERVATIVE.includes(p.homeScore+'-'+p.awayScore)).length;
-    const allP=DB.getPredictions();
-    let totalRisk=0;
-    for(const m of finished){const p=myPreds.find(x=>x.matchId===m.id);if(p)totalRisk+=calcRiskBonus(p,m.homeScore,m.awayScore,m.id,allP);}
     html+='<div class="fun-badges-grid">'+
-      '<div class="fun-badge-card"><div class="fun-badge-icon">🦁</div><div class="fun-badge-info"><div class="fun-badge-name">El Valiente</div><div class="fun-badge-val">'+(sc.soloSurprise||0)+' sorpresa'+(( sc.soloSurprise||0)!==1?'s':'')+' acertadas solo</div></div></div>'+
+      '<div class="fun-badge-card"><div class="fun-badge-icon">🦁</div><div class="fun-badge-info"><div class="fun-badge-name">El Valiente</div><div class="fun-badge-val">'+(sc.soloSurprise||0)+' vez'+(( sc.soloSurprise||0)!==1?'es':'')+' el único en acertar (×2 pts)</div></div></div>'+
       '<div class="fun-badge-card"><div class="fun-badge-icon">🐢</div><div class="fun-badge-info"><div class="fun-badge-name">El Conservador</div><div class="fun-badge-val">'+conservCount+' apuestas clásicas</div></div></div>'+
       '<div class="fun-badge-card"><div class="fun-badge-icon">⭐</div><div class="fun-badge-info"><div class="fun-badge-name">Pleno de Jornada</div><div class="fun-badge-val">'+(sc.plenoGrupo||0)+' jornada'+(( sc.plenoGrupo||0)!==1?'s':'')+' perfectas</div></div></div>'+
-      '<div class="fun-badge-card"><div class="fun-badge-icon">🎲</div><div class="fun-badge-info"><div class="fun-badge-name">Bonus Riesgo</div><div class="fun-badge-val">'+totalRisk+' pts ganados por apostar diferente</div></div></div>'+
       '<div class="fun-badge-card"><div class="fun-badge-icon">🔥</div><div class="fun-badge-info"><div class="fun-badge-name">Racha actual</div><div class="fun-badge-val">'+(sc.curStreak||0)+' aciertos · máx '+(sc.maxStreak||0)+'</div></div></div>'+
       '<div class="fun-badge-card"><div class="fun-badge-icon">🥅</div><div class="fun-badge-info"><div class="fun-badge-name">Penales</div><div class="fun-badge-val">'+(sc.penalesOk||0)+' ganador de penales acertado</div></div></div>'+
       '</div>';
@@ -1724,22 +1723,42 @@ function renderFlagSm(code, name) {
   return '<span class="team-flag-sm"><img src="https://api.fifa.com/api/v3/picture/flags-sq-2/'+code+'" alt="'+name+'" onerror="this.style.display=\'none\'"></span>';
 }
 
+// ── Partido Imprevisible ──
+function getImprevisibleMatchId() {
+  const allPreds = DB.getPredictions();
+  const playerIds = new Set(DB.getPlayers().map(p=>p.id));
+  let bestId = null, bestScore = -1;
+  for (const m of matches.filter(x=>x.status!=='finished')) {
+    const on = allPreds.filter(x=>x.matchId===m.id && playerIds.has(x.playerId));
+    if (on.length < 3) continue;
+    const h = on.filter(x=>outcome(x.homeScore,x.awayScore)==='H').length;
+    const d = on.filter(x=>outcome(x.homeScore,x.awayScore)==='D').length;
+    const v = on.filter(x=>outcome(x.homeScore,x.awayScore)==='V').length;
+    const maxPct = Math.max(h,d,v) / on.length;
+    if (maxPct > 0.4) continue;
+    if ((1 - maxPct) > bestScore) { bestScore = 1 - maxPct; bestId = m.id; }
+  }
+  return bestId;
+}
+
 // ── Reglamento collapsible (se usa en renderPredictions) ──
 function reglamentoHTML() {
   return '<div class="reglamento-toggle" onclick="toggleReglamento()">'+
     '<span>📋 Reglamento de puntuación</span><span id="regl-icon">▼</span></div>'+
     '<div class="reglamento-body" id="regl-body" style="display:none;">'+
-    '<table><tr><td>🎯 Resultado exacto</td><td>5 pts base</td></tr>'+
+    '<table>'+
+    '<tr><td>🎯 Resultado exacto</td><td>5 pts base</td></tr>'+
     '<tr><td>✓ Ganador / empate correcto</td><td>3 pts base</td></tr>'+
-    '<tr><td>+ Diferencia de goles exacta</td><td>+1 pt base</td></tr>'+
-    '<tr><td>🎯 Redoblona (vale ×2)</td><td>× 2 todo</td></tr>'+
-    '<tr><td>🏆 Campeón del Mundial</td><td>+15 pts</td></tr>'+
-    '<tr><td>⚽ Goleador del torneo</td><td>+10 pts</td></tr>'+
-    '<tr><td>🎲 Bonus riesgo (apostaste solo)</td><td>+2 / +3 pts</td></tr>'+
+    '<tr><td>+ Diferencia de goles exacta</td><td>+1 pt adicional</td></tr>'+
+    '<tr><td>🎯 Redoblona</td><td>× 2 todos los puntos del partido</td></tr>'+
+    '<tr><td>⚽ Penales (playoffs, si pronosticás empate)</td><td>+2 a +12 pts según fase</td></tr>'+
+    '<tr><td>🦁 El Valiente (único en acertar un partido)</td><td>× 2 todos los puntos del partido</td></tr>'+
     '</table>'+
     '<div style="margin-top:10px;font-size:11px;"><strong style="color:var(--text);">Multiplicador por fase:</strong> Grupos ×1 · 16vos ×2 · 8vos ×3 · Cuartos ×4 · Semis/3er ×5 · Final ×7</div>'+
-    '<div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Redoblones:</strong> Grupos: 1 por grupo · 16vos: 2 · 8vos: 1 · Cuartos: 1 · Semis/3er/Final: sin redoblona</div>'+
-    '<div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Playoffs:</strong> Si pronosticás empate, elegís quién gana en penales. Acierto: +2 pts (16vos) hasta +12 pts (Final).</div>'+
+    '<div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Redoblones disponibles:</strong> Grupos: 1 por grupo · 16vos: 2 · 8vos: 1 · Cuartos: 1 · Semis/3er/Final: sin redoblona</div>'+
+    '<div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Bonus penales por fase:</strong> 16vos +2 · 8vos +4 · Cuartos +6 · Semis +8 · 3er puesto +10 · Final +12</div>'+
+    '<div style="margin-top:10px;font-size:11px;background:rgba(251,191,36,.08);border:.5px solid rgba(251,191,36,.25);border-radius:6px;padding:8px 10px;"><strong style="color:var(--gold);">Pronósticos especiales (editables hasta inicio del torneo)</strong><br>'+
+    '🥇 Campeón +15 pts · 🥈 Subcampeón +8 pts · 🥉 Tercer puesto +5 pts · ⚽ Goleador +10 pts</div>'+
     '</div>';
 }
 
@@ -1772,6 +1791,7 @@ function renderPredictions(con) {
 
   // Pronósticos especiales
   const spLocked = new Date() >= MUNDIAL_START;
+  const allTeams = [...new Set(matches.flatMap(m=>[m.homeTeam,m.awayTeam]))].filter(Boolean).sort();
   const spRow = (label, id, placeholder, savedVal, type) => {
     const val = savedVal || '';
     if (spLocked) {
@@ -1786,12 +1806,13 @@ function renderPredictions(con) {
     return `<div>
       <div class="form-label">${label}</div>
       <div style="display:flex;gap:8px;">
-        <input type="text" id="${id}" placeholder="${placeholder}" style="flex:1;" value="${val}">
+        <input type="text" id="${id}" placeholder="${placeholder}" style="flex:1;" value="${val}" list="sp-teams">
         <button class="btn btn-gold" onclick="saveSpecial('${type}')" style="padding:10px 14px;">${val ? 'Actualizar' : 'Guardar'}</button>
       </div>
     </div>`;
   };
-  html += `<div class="special-card">
+  const teamsDatalist = `<datalist id="sp-teams">${allTeams.map(t=>`<option value="${t}">`).join('')}</datalist>`;
+  html += `${teamsDatalist}<div class="special-card">
     <div class="sp-header">
       <div class="sp-icon">🏆</div>
       <div><div class="sp-title">Pronósticos Especiales</div><div class="sp-sub">Hasta 38 puntos en juego · ${spLocked ? '🔒 Cerrados al inicio del torneo' : 'Editables hasta el inicio del torneo'}</div></div>
@@ -1817,6 +1838,8 @@ function renderPredictions(con) {
   }
   const phaseOrder = Object.keys(PHASES);
   const sortedPhases = Object.keys(byPhase).sort((a,b) => phaseOrder.indexOf(a)-phaseOrder.indexOf(b));
+
+  const imprevisibleId = getImprevisibleMatchId();
 
   for (const phase of sortedPhases) {
     const phaseMatches = byPhase[phase];
@@ -1852,6 +1875,7 @@ function renderPredictions(con) {
           <span>${metaLeft}${m.city?' · '+m.city:''}</span>
           <span>${metaRight}</span>
         </div>
+        ${m.id===imprevisibleId ? `<div style="display:flex;align-items:center;gap:5px;padding:5px 10px;margin-bottom:4px;background:rgba(251,191,36,.08);border:.5px solid rgba(251,191,36,.3);border-radius:6px;font-size:11px;color:var(--gold);font-weight:600;">🎲 Partido Imprevisible · Las apuestas están muy divididas</div>` : ''}
         <div class="match-body">
           <div class="team-side">
             <div class="team-flag">${renderFlag(m.homeCode, m.homeTeam)}</div>
