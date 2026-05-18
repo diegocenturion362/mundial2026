@@ -99,6 +99,12 @@ select { appearance:none; }
 .wc-btn:hover { border-color:var(--gold); color:var(--gold); }
 .wc-btn.active { background:var(--gold-dim); border-color:var(--gold); color:var(--gold); }
 .wc-btn:disabled { opacity:.3; cursor:not-allowed; }
+.pen-selector { margin-top:10px; padding:9px 12px; background:rgba(74,222,128,.05); border:.5px solid rgba(74,222,128,.15); border-radius:var(--radius-s); }
+.pen-label { font-size:11px; color:var(--text-m); margin-bottom:7px; font-weight:500; }
+.pen-btns { display:flex; gap:6px; }
+.pen-btn { flex:1; padding:7px 8px; border-radius:var(--radius-s); border:.5px solid var(--border-md); background:var(--bg-el); color:var(--text-m); font-family:var(--fb); font-size:12px; cursor:pointer; transition:all .15s; text-align:center; }
+.pen-btn:hover { border-color:var(--accent); color:var(--text); }
+.pen-btn.active { background:rgba(74,222,128,.15); border-color:var(--accent); color:var(--accent); font-weight:600; }
 .pill { font-size:11px; padding:3px 10px; border-radius:20px; font-weight:500; }
 .pill-exact { background:rgba(74,222,128,.15); color:var(--accent); }
 .pill-partial { background:var(--gold-dim); color:var(--gold); }
@@ -408,7 +414,7 @@ select { appearance:none; }
     </div>
     <div class="modal-tabs" id="rules-tabs">
       <button class="modal-tab active" onclick="switchRulesTab('puntos')">Puntos</button>
-      <button class="modal-tab" onclick="switchRulesTab('comodines')">Comodines</button>
+      <button class="modal-tab" onclick="switchRulesTab('comodines')">Redoblones</button>
       <button class="modal-tab" onclick="switchRulesTab('playoffs')">Playoffs</button>
       <button class="modal-tab" onclick="switchRulesTab('especiales')">Especiales</button>
       <button class="modal-tab" onclick="switchRulesTab('faq')">FAQ</button>
@@ -727,7 +733,7 @@ const AVATAR_COLORS = [
 const PHASES = {
   grupos:'Fase de Grupos', r32:'Ronda de 32',
   r16:'Octavos de Final', qf:'Cuartos de Final',
-  sf:'Semifinales', final:'Final'
+  sf:'Semifinales', third:'3er Puesto', final:'Final'
 };
 
 
@@ -1033,7 +1039,11 @@ function renderView(v) {
 // ║  CONSTANTES Y SISTEMA DE PUNTOS                   ║
 // ╚══════════════════════════════════════════════════╝
 const PLAYOFF_PHASES = new Set(['r32','r16','qf','sf','third','final']);
-const WC_QUOTA = { grupos:1, r32:2, r16:2, qf:1, sf:1, third:1, final:1 };
+const WC_QUOTA    = { grupos:1, r32:2, r16:1, qf:1, sf:0, third:0, final:0 };
+const PHASE_MULT  = { grupos:1, r32:2, r16:3, qf:4, sf:5, third:5, final:7 };
+const PEN_BONUS_PTS = { r32:2, r16:4, qf:6, sf:8, third:10, final:12 };
+const MUNDIAL_START = new Date('2026-06-11T00:00:00');
+const SPECIAL_PTS = { champion:15, subCampeon:8, tercerPuesto:5, topScorer:10 };
 
 // GROUPS: se usa para tabla de posiciones (fallback si FIFA no los provee)
 const GROUPS = {
@@ -1053,7 +1063,7 @@ const ACHIEVEMENTS = [
   {id:'exact10',     icon:'🔮', title:'Oráculo',         desc:'10 resultados exactos',                check:(s,r)=>s.exact>=10},
   {id:'streak3',     icon:'🔥', title:'En llamas',       desc:'3 aciertos seguidos',                  check:(s,r)=>s.maxStreak>=3},
   {id:'streak5',     icon:'⚡', title:'Imparable',       desc:'5 aciertos consecutivos',              check:(s,r)=>s.maxStreak>=5},
-  {id:'wc_win',      icon:'🃏', title:'Comodín certero', desc:'Puntos dobles con un comodín',         check:(s,r)=>s.wildcardWin},
+  {id:'wc_win',      icon:'🎯', title:'Redoblona certera', desc:'Puntos dobles con una redoblona',      check:(s,r)=>s.wildcardWin},
   {id:'top3',        icon:'🏆', title:'Top 3',           desc:'Estás en el podio',                    check:(s,r)=>r<=3&&r>0},
   {id:'leader',      icon:'👑', title:'Líder',           desc:'Llegaste al primer puesto',             check:(s,r)=>r===1},
   {id:'no_blank',    icon:'💪', title:'Comprometido',    desc:'Pronosticaste 10+ partidos',            check:(s,r)=>s.totalPreds>=10},
@@ -1069,7 +1079,7 @@ const REACTIONS = ['🔥','😮','😂','👏','💀'];
 
 function calcRiskBonus(pred, hScore, aScore, matchId, allPredictions) {
   if (!pred || hScore===null) return 0;
-  const base = calcPtsBase(pred, hScore, aScore, null);
+  const base = calcPtsBase(pred, hScore, aScore);
   if (base === 0) return 0;
   const onMatch = allPredictions.filter(p=>p.matchId===matchId);
   const total = onMatch.length;
@@ -1082,22 +1092,24 @@ function calcRiskBonus(pred, hScore, aScore, matchId, allPredictions) {
   return 0;
 }
 
-function calcPtsBase(pred, hScore, aScore, penWinner) {
+function calcPtsBase(pred, hScore, aScore) {
   if (!pred || hScore===null || aScore===null) return 0;
-  const isExact = pred.homeScore===hScore && pred.awayScore===aScore;
+  const isExact  = pred.homeScore===hScore && pred.awayScore===aScore;
   const isWinner = outcome(pred.homeScore,pred.awayScore)===outcome(hScore,aScore);
-  const isGdOk = (pred.homeScore-pred.awayScore)===(hScore-aScore);
-  let mp = 0;
-  if (isExact) { mp = 5; }
-  else if (isWinner) { mp = 3; if (isGdOk) mp += 1; }
-  if (penWinner && pred.penWinner && pred.penWinner===penWinner) mp += 1;
-  return mp;
+  const isGdOk   = (pred.homeScore-pred.awayScore)===(hScore-aScore);
+  if (isExact) return 5;
+  if (isWinner) return isGdOk ? 4 : 3;
+  return 0;
 }
 
-function calcPts(pred, hScore, aScore, isWC, penWinner) {
-  let mp = calcPtsBase(pred, hScore, aScore, penWinner);
-  if (isWC && mp>0) mp*=2;
-  return mp;
+function calcPts(pred, hScore, aScore, isWC, phase, penWinner) {
+  const raw = calcPtsBase(pred, hScore, aScore);
+  if (raw === 0) return 0;
+  const mult = PHASE_MULT[phase] || 1;
+  let pts = raw * mult;
+  if (penWinner && pred.penWinner && pred.penWinner === penWinner) pts += (PEN_BONUS_PTS[phase] || 0);
+  if (isWC) pts *= 2;
+  return pts;
 }
 
 function isWCUsed(wcData, match) {
@@ -1171,17 +1183,22 @@ function scorePlayer(playerId) {
     const p = preds.find(x=>x.matchId===m.id);
     if (!p) { curStreak=0; continue; }
     totalPreds++;
-    const isWC  = isWCUsed(wcData, m);
-    const base  = calcPtsBase(p, m.homeScore, m.awayScore, m.penWinner);
-    const risk  = calcRiskBonus(p, m.homeScore, m.awayScore, m.id, activePreds);
-    const mp    = isWC && base>0 ? base*2 : base;
-    const total = mp + risk;
-    if (base===5) { exact++; curStreak++; }
-    else if (base>=3) { partial++; curStreak++; }
-    else if (base===0) { curStreak=0; }
-    else { curStreak++; }
-    if (base>3 && base<5) gdBonus++;
-    if (isWC && mp>0) wildcardWin=true;
+    const isWC   = isWCUsed(wcData, m);
+    const rawBase = calcPtsBase(p, m.homeScore, m.awayScore);
+    const mult   = PHASE_MULT[m.phase] || 1;
+    let mp = rawBase * mult;
+    if (m.penWinner && p.penWinner && p.penWinner===m.penWinner) mp += (PEN_BONUS_PTS[m.phase]||0);
+    if (isWC && mp>0) { mp*=2; wildcardWin=true; }
+    const risk  = rawBase>0 ? calcRiskBonus(p, m.homeScore, m.awayScore, m.id, activePreds) : 0;
+    let total = mp + risk;
+    if (total>0) {
+      const onMatch = activePreds.filter(x=>x.matchId===m.id);
+      if (onMatch.length===1 && onMatch[0].playerId===playerId) total*=2;
+    }
+    if (rawBase===5) { exact++; curStreak++; }
+    else if (rawBase>=3) { partial++; curStreak++; }
+    else { curStreak=0; }
+    if (rawBase===4) gdBonus++;
     maxStreak = Math.max(maxStreak, curStreak);
     confirmedPts += total;
   }
@@ -1189,7 +1206,7 @@ function scorePlayer(playerId) {
     const p = preds.find(x=>x.matchId===m.id);
     if (!p||m.homeScore===null) continue;
     const isWC = isWCUsed(wcData, m);
-    provisionalPts += calcPts(p, m.homeScore, m.awayScore, isWC, m.penWinner);
+    provisionalPts += calcPts(p, m.homeScore, m.awayScore, isWC, m.phase, m.penWinner);
   }
   const meta = DB.get('meta',{});
   let championOk=false;
@@ -1197,6 +1214,14 @@ function scorePlayer(playerId) {
   if (special?.champion && meta.champion &&
       special.champion.trim().toLowerCase()===meta.champion.trim().toLowerCase()) {
     confirmedPts+=15; championOk=true;
+  }
+  if (special?.subCampeon && meta.subCampeon &&
+      special.subCampeon.trim().toLowerCase()===meta.subCampeon.trim().toLowerCase()) {
+    confirmedPts+=8;
+  }
+  if (special?.tercerPuesto && meta.tercerPuesto &&
+      special.tercerPuesto.trim().toLowerCase()===meta.tercerPuesto.trim().toLowerCase()) {
+    confirmedPts+=5;
   }
   if (special?.topScorer && meta.topScorer &&
       special.topScorer.trim().toLowerCase()===meta.topScorer.trim().toLowerCase()) {
@@ -1221,7 +1246,12 @@ function provPtsForMatch(playerId, matchId) {
   if (!p) return null;
   const wcData = DB.getWildcards()[playerId]||{};
   const isWC = isWCUsed(wcData, m);
-  return calcPts(p, m.homeScore, m.awayScore, isWC, m.penWinner);
+  let pts = calcPts(p, m.homeScore, m.awayScore, isWC, m.phase, m.penWinner);
+  if (pts > 0) {
+    const onMatch = activePredictions().filter(x=>x.matchId===matchId);
+    if (onMatch.length===1 && onMatch[0].playerId===playerId) pts*=2;
+  }
+  return pts;
 }
 
 // Puntos que ganó un jugador en un partido específico (para ranking por jornada)
@@ -1232,10 +1262,15 @@ function ptsEarnedInMatch(playerId, matchId) {
   if (!p) return 0;
   const wcData = DB.getWildcards()[playerId]||{};
   const isWC = isWCUsed(wcData, m);
-  const base = calcPtsBase(p, m.homeScore, m.awayScore, m.penWinner);
-  const mp = isWC && base>0 ? base*2 : base;
-  const risk = calcRiskBonus(p, m.homeScore, m.awayScore, m.id, DB.getPredictions());
-  return mp + risk;
+  const pts = calcPts(p, m.homeScore, m.awayScore, isWC, m.phase, m.penWinner);
+  const risk = pts>0 ? calcRiskBonus(p, m.homeScore, m.awayScore, m.id, DB.getPredictions()) : 0;
+  let total = pts + risk;
+  if (total > 0) {
+    const allActive = activePredictions();
+    const onMatch = allActive.filter(x=>x.matchId===matchId);
+    if (onMatch.length===1 && onMatch[0].playerId===playerId) total *= 2;
+  }
+  return total;
 }
 
 function betResult(pred, hScore, aScore) {
@@ -1248,7 +1283,7 @@ function betResult(pred, hScore, aScore) {
 function ptsLabel(pts, res, isWC) {
   if (pts===null) return '–';
   if (pts===0) return res==='wrong'?'✗ 0':'–';
-  return (isWC?'🃏 ':'')+'+'+pts+' pts';
+  return (isWC?'🎯 ':'')+'+'+pts+' pts';
 }
 
 function liveMinute(m) {
@@ -1395,7 +1430,7 @@ function renderMisApuestas(con) {
     html+='<div class="apuesta-row" data-status="'+statusClass+'" style="display:flex;align-items:center;gap:9px;padding:9px 12px;'+rowBg+';border-radius:var(--radius-s);border:.5px solid var(--border);margin-bottom:6px;">'+
       '<div style="font-size:16px;flex-shrink:0;width:20px;text-align:center;">'+statusIcon+'</div>'+
       '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
-      m.homeTeam+' vs '+m.awayTeam+(isWC?' 🃏':'')+'</div>'+
+      m.homeTeam+' vs '+m.awayTeam+(isWC?' 🎯':'')+'</div>'+
       '<div style="font-size:11px;color:var(--text-m);">'+(PHASES[m.phase]||m.phase)+(m.group?' · Gr.'+m.group:'')+
       (isLive?' <span class="live-badge"><span class="live-dot"></span>En vivo</span>':'')+
       (isFin&&m.homeScore!==null?' · '+m.homeScore+'-'+m.awayScore:'')+
@@ -1512,15 +1547,12 @@ function renderPerfil(con) {
     for (const m of sortedFin) {
       const p=myPreds.find(x=>x.matchId===m.id);
       const isWC=isWCUsed(wcData,m);
-      const base=p?calcPtsBase(p,m.homeScore,m.awayScore,m.penWinner):0;
-      const mp=isWC&&base>0?base*2:base;
-      const risk=p?calcRiskBonus(p,m.homeScore,m.awayScore,m.id,allPreds):0;
-      const total=mp+risk;
+      const total=p?ptsEarnedInMatch(currentPlayer.id,m.id):0;
       const res=p?betResult(p,m.homeScore,m.awayScore):'none';
       const ptsCls=res==='exact'?'exact':res==='partial'?'partial':'wrong';
       html+='<div class="hist-row">'+
         '<div class="hist-match"><div class="hist-teams">'+m.homeTeam+' vs '+m.awayTeam+'</div>'+
-        '<div class="hist-meta">'+(PHASES[m.phase]||m.phase)+' · '+m.homeScore+'-'+m.awayScore+(isWC?' 🃏':'')+(risk>0?' <span class="risk-badge">🎲 +'+risk+'</span>':'')+'</div></div>'+
+        '<div class="hist-meta">'+(PHASES[m.phase]||m.phase)+' · '+m.homeScore+'-'+m.awayScore+(isWC?' 🎯':'')+(risk>0?' <span class="risk-badge">🎲 +'+risk+'</span>':'')+'</div></div>'+
         '<div class="hist-pred" style="color:'+(p?'var(--text)':'var(--text-d)')+';">'+(p?p.homeScore+'-'+p.awayScore:'–')+'</div>'+
         '<div class="hist-pts bet-pts '+ptsCls+'">'+(p?'+'+total:'–')+'</div></div>';
     }
@@ -1568,9 +1600,44 @@ function renderPerfil(con) {
       '<div class="fun-badge-card"><div class="fun-badge-icon">🥅</div><div class="fun-badge-info"><div class="fun-badge-name">Penales</div><div class="fun-badge-val">'+(sc.penalesOk||0)+' ganador de penales acertado</div></div></div>'+
       '</div>';
   }
+  html += `<div id="baja-zone" style="margin-top:18px;padding:14px;background:rgba(248,113,113,.07);border:.5px solid rgba(248,113,113,.2);border-radius:12px;">
+    <div style="font-size:13px;font-weight:600;color:var(--danger);margin-bottom:8px;">Darme de baja</div>
+    <p style="font-size:12px;color:var(--text-m);margin-bottom:10px;">Elimina tu cuenta, pronósticos y redoblones de forma permanente.</p>
+    <div id="baja-confirm" style="display:none;margin-bottom:10px;padding:10px 12px;background:rgba(248,113,113,.12);border-radius:8px;font-size:13px;color:var(--danger);">
+      ¿Estás seguro? Esta acción no se puede deshacer.
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn" style="flex:1;padding:8px;background:var(--danger);color:#fff;border:none;" onclick="confirmarBaja()">Sí, darme de baja</button>
+        <button class="btn btn-secondary" style="flex:1;padding:8px;" onclick="document.getElementById('baja-confirm').style.display='none';document.getElementById('baja-btn').style.display='block';">Cancelar</button>
+      </div>
+    </div>
+    <button id="baja-btn" class="btn btn-secondary" style="width:100%;color:var(--danger);border-color:rgba(248,113,113,.4);" onclick="darseDeBaja()">Darme de baja</button>
+  </div>`;
+
   con.innerHTML=html;
 }
 function setPerfilTab(tab) { perfilTab=tab; renderView('perfil'); }
+
+function darseDeBaja() {
+  document.getElementById('baja-btn').style.display='none';
+  document.getElementById('baja-confirm').style.display='block';
+}
+
+function confirmarBaja() {
+  const playerId = currentPlayer.id;
+  DB.savePlayers(DB.getPlayers().filter(x=>x.id!==playerId));
+  DB.savePredictions(DB.getPredictions().filter(x=>x.playerId!==playerId));
+  const wc = DB.getWildcards(); delete wc[playerId]; DB.saveWildcards(wc);
+  DB.saveSpecial(DB.getSpecial().filter(x=>x.playerId!==playerId));
+  sessionStorage.removeItem('wc26_cp');
+  currentPlayer = null;
+  toast('Tu cuenta fue eliminada','ok');
+  setTimeout(() => {
+    document.getElementById('app').style.display='none';
+    const sel = document.getElementById('player-select');
+    sel.style.display='flex';
+    sel.innerHTML = renderLoginScreen();
+  }, 900);
+}
 
 // ── Grupos (tabla de posiciones) ──
 function renderGrupos(con) {
@@ -1662,16 +1729,17 @@ function reglamentoHTML() {
   return '<div class="reglamento-toggle" onclick="toggleReglamento()">'+
     '<span>📋 Reglamento de puntuación</span><span id="regl-icon">▼</span></div>'+
     '<div class="reglamento-body" id="regl-body" style="display:none;">'+
-    '<table><tr><td>🎯 Resultado exacto</td><td>5 pts</td></tr>'+
-    '<tr><td>✓ Ganador / empate correcto</td><td>3 pts</td></tr>'+
-    '<tr><td>+ Diferencia de goles exacta</td><td>+1 pt</td></tr>'+
-    '<tr><td>🃏 Comodín</td><td>× 2 todo</td></tr>'+
+    '<table><tr><td>🎯 Resultado exacto</td><td>5 pts base</td></tr>'+
+    '<tr><td>✓ Ganador / empate correcto</td><td>3 pts base</td></tr>'+
+    '<tr><td>+ Diferencia de goles exacta</td><td>+1 pt base</td></tr>'+
+    '<tr><td>🎯 Redoblona (vale ×2)</td><td>× 2 todo</td></tr>'+
     '<tr><td>🏆 Campeón del Mundial</td><td>+15 pts</td></tr>'+
     '<tr><td>⚽ Goleador del torneo</td><td>+10 pts</td></tr>'+
-    '<tr><td>🎲 Bonus riesgo (mayoría no apostó igual)</td><td>+2 / +3 pts</td></tr>'+
+    '<tr><td>🎲 Bonus riesgo (apostaste solo)</td><td>+2 / +3 pts</td></tr>'+
     '</table>'+
-    '<div style="margin-top:10px;font-size:11px;"><strong style="color:var(--text);">Comodines:</strong> Grupos: 1 por grupo · 16vos: 2 · 8vos: 2 · Cuartos: 1 · Semis: 1 · Final: 1</div>'+
-    '<div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Playoffs:</strong> Resultado válido en 90min + alargue. Penales no cambian el marcador.</div>'+
+    '<div style="margin-top:10px;font-size:11px;"><strong style="color:var(--text);">Multiplicador por fase:</strong> Grupos ×1 · 16vos ×2 · 8vos ×3 · Cuartos ×4 · Semis/3er ×5 · Final ×7</div>'+
+    '<div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Redoblones:</strong> Grupos: 1 por grupo · 16vos: 2 · 8vos: 1 · Cuartos: 1 · Semis/3er/Final: sin redoblona</div>'+
+    '<div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Playoffs:</strong> Si pronosticás empate, elegís quién gana en penales. Acierto: +2 pts (16vos) hasta +12 pts (Final).</div>'+
     '</div>';
 }
 
@@ -1703,30 +1771,36 @@ function renderPredictions(con) {
   }
 
   // Pronósticos especiales
+  const spLocked = new Date() >= MUNDIAL_START;
+  const spRow = (label, id, placeholder, savedVal, type) => {
+    const val = savedVal || '';
+    if (spLocked) {
+      return `<div>
+        <div class="form-label">${label}</div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" style="flex:1;" value="${val}" disabled>
+          <span style="padding:10px;font-size:18px;">${val ? '🔒' : '–'}</span>
+        </div>
+      </div>`;
+    }
+    return `<div>
+      <div class="form-label">${label}</div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="${id}" placeholder="${placeholder}" style="flex:1;" value="${val}">
+        <button class="btn btn-gold" onclick="saveSpecial('${type}')" style="padding:10px 14px;">Guardar</button>
+      </div>
+    </div>`;
+  };
   html += `<div class="special-card">
     <div class="sp-header">
       <div class="sp-icon">🏆</div>
-      <div><div class="sp-title">Pronósticos Especiales</div><div class="sp-sub">Hasta 25 puntos en juego · Se bloquean al inicio del torneo</div></div>
+      <div><div class="sp-title">Pronósticos Especiales</div><div class="sp-sub">Hasta 38 puntos en juego · ${spLocked ? '🔒 Cerrados al inicio del torneo' : 'Editables hasta el inicio del torneo'}</div></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <div>
-        <div class="form-label">🥇 Campeón del Mundial <span style="color:var(--gold);">+15 pts</span></div>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="sp-champ" placeholder="País campeón" style="flex:1;" value="${special?.champion||''}" ${special?.champion?'disabled':''}>
-          ${!special?.champion
-            ? `<button class="btn btn-gold" onclick="saveSpecial('champion')" style="padding:10px 14px;">Guardar</button>`
-            : `<span style="padding:10px;font-size:18px;">✅</span>`}
-        </div>
-      </div>
-      <div>
-        <div class="form-label">⚽ Goleador del torneo <span style="color:var(--gold);">+10 pts</span></div>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="sp-scorer" placeholder="Nombre del jugador" style="flex:1;" value="${special?.topScorer||''}" ${special?.topScorer?'disabled':''}>
-          ${!special?.topScorer
-            ? `<button class="btn btn-gold" onclick="saveSpecial('scorer')" style="padding:10px 14px;">Guardar</button>`
-            : `<span style="padding:10px;font-size:18px;">✅</span>`}
-        </div>
-      </div>
+      ${spRow('🥇 Campeón del Mundial <span style="color:var(--gold);">+15 pts</span>','sp-champ','País campeón',special?.champion,'champion')}
+      ${spRow('🥈 Subcampeón <span style="color:var(--gold);">+8 pts</span>','sp-sub','País subcampeón',special?.subCampeon,'subCampeon')}
+      ${spRow('🥉 Tercer puesto <span style="color:var(--gold);">+5 pts</span>','sp-third','País tercer puesto',special?.tercerPuesto,'tercerPuesto')}
+      ${spRow('⚽ Goleador del torneo <span style="color:var(--gold);">+10 pts</span>','sp-scorer','Nombre del jugador',special?.topScorer,'scorer')}
     </div>
   </div>`;
 
@@ -1746,18 +1820,28 @@ function renderPredictions(con) {
 
   for (const phase of sortedPhases) {
     const phaseMatches = byPhase[phase];
-    const wcUsedId = myWC[phase];
-    const wcAvail  = !wcUsedId;
+    const quota = WC_QUOTA[phase] || 0;
+    const mult  = PHASE_MULT[phase] || 1;
 
-    html += `<div class="sec-title">${PHASES[phase]||phase}
-      ${wcAvail ? '<span style="color:var(--gold);font-size:11px;margin-left:6px;">🃏 Tenés un comodín disponible</span>' : ''}
-    </div>`;
+    const multTag = mult > 1
+      ? `<span style="color:var(--text-m);font-size:11px;margin-left:6px;font-weight:500;">×${mult} pts</span>` : '';
+    let wcTag = '';
+    if (quota > 0) {
+      if (phase === 'grupos') {
+        wcTag = `<span style="color:var(--gold);font-size:11px;margin-left:6px;">🎯 1 redoblona por grupo</span>`;
+      } else {
+        const rem = wcRemaining(myWC, phase, '');
+        if (rem > 0) wcTag = `<span style="color:var(--gold);font-size:11px;margin-left:6px;">🎯 ${rem} redoblona${rem>1?'s':''} disponible${rem>1?'s':''}</span>`;
+      }
+    }
+    html += `<div class="sec-title">${PHASES[phase]||phase}${multTag}${wcTag}</div>`;
 
     for (const m of phaseMatches) {
       const pred   = preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id);
       const closed = isClosed(m);
-      const isWC   = myWC[phase] === m.id;
-      const canWC  = wcAvail || isWC;
+      const isWC   = isWCUsed(myWC, m);
+      const rem    = wcRemaining(myWC, m.phase, m.group);
+      const canWC  = quota > 0 && (rem > 0 || isWC);
 
       // Meta line: group + date + venue
       const metaLeft  = m.group && m.group !== '?' ? `Grupo ${m.group}` : (PHASES[phase]||phase);
@@ -1775,24 +1859,46 @@ function renderPredictions(con) {
           </div>
           <div class="score-area">
             <input type="number" class="score-box" id="h-${m.id}" min="0" max="20" placeholder="–"
-              value="${pred!=null?pred.homeScore:''}" ${closed?'disabled':''}>
+              value="${pred!=null?pred.homeScore:''}" ${closed?'disabled':''}
+              ${!closed&&PLAYOFF_PHASES.has(m.phase)?`oninput="checkPenSelector('${m.id}')"`:''}>
             <span class="score-sep">:</span>
             <input type="number" class="score-box" id="a-${m.id}" min="0" max="20" placeholder="–"
-              value="${pred!=null?pred.awayScore:''}" ${closed?'disabled':''}>
+              value="${pred!=null?pred.awayScore:''}" ${closed?'disabled':''}
+              ${!closed&&PLAYOFF_PHASES.has(m.phase)?`oninput="checkPenSelector('${m.id}')"`:''}>
           </div>
           <div class="team-side">
             <div class="team-flag">${renderFlag(m.awayCode, m.awayTeam)}</div>
             <div class="team-name">${m.awayTeam}</div>
           </div>
         </div>
+        ${(() => {
+          if (!PLAYOFF_PHASES.has(m.phase)) return '';
+          if (closed) {
+            if (!pred?.penWinner) return '';
+            const penName = pred.penWinner===m.homeCode ? m.homeTeam : pred.penWinner===m.awayCode ? m.awayTeam : pred.penWinner;
+            return `<div style="margin-top:8px;font-size:11px;color:var(--text-m);padding:6px 10px;background:var(--bg-el);border-radius:var(--radius-s);">⚽ Penales: <strong style="color:var(--text);">${penName}</strong></div>`;
+          }
+          const initDraw = pred && pred.homeScore===pred.awayScore;
+          const hActive  = pred?.penWinner===m.homeCode;
+          const aActive  = pred?.penWinner===m.awayCode;
+          return `<div class="pen-selector" id="pen-row-${m.id}" style="display:${initDraw?'block':'none'};">
+            <div class="pen-label">⚽ ¿Quién gana en penales?</div>
+            <div class="pen-btns">
+              <button class="pen-btn${hActive?' active':''}" id="pen-h-${m.id}" onclick="setPenWinner('${m.id}',true)">${m.homeTeam}</button>
+              <button class="pen-btn${aActive?' active':''}" id="pen-a-${m.id}" onclick="setPenWinner('${m.id}',false)">${m.awayTeam}</button>
+            </div>
+          </div>`;
+        })()}
         <div class="match-footer">
           ${closed
             ? `<span class="closed-lbl">🔒 ${m.status==='finished'?'Finalizado':'Cerrado'}</span>`
-            : `<button class="wc-btn ${isWC?'active':''}" id="wc-${m.id}"
-                onclick="toggleWC('${m.id}','${phase}')" ${!canWC?'disabled':''}
-                title="${isWC?'Quitar comodín':wcAvail?'Usar comodín (×2 pts)':'Comodín ya usado en este torneo'}">
-                🃏 ${isWC?'Comodín ×2':'Comodín'}
-              </button>`}
+            : quota > 0
+              ? `<button class="wc-btn ${isWC?'active':''}" id="wc-${m.id}"
+                  onclick="toggleWC('${m.id}')" ${!canWC?'disabled':''}
+                  title="${isWC?'Quitar redoblona':rem>0?'Usar redoblona (×2 pts)':'Ya usaste tu redoblona en este grupo/fase'}">
+                  🎯 ${isWC?'Redoblona ×2':'Redoblona'}
+                </button>`
+              : ''}
           <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
             ${closed
               ? `<span class="pill pill-info">${pred!=null?pred.homeScore+'-'+pred.awayScore:'Sin pronóstico'}</span>`
@@ -1868,7 +1974,7 @@ function renderBetsPanel(m) {
       '<span style="font-size:13px;flex:1;' + (isMe ? 'font-weight:600;' : '') + '">' +
         pl.name + (isMe ? ' <span style="font-size:10px;color:var(--accent);">(vos)</span>' : '') +
       '</span>' +
-      (isWC  ? '<span class="bet-badge">🃏</span>' : '') +
+      (isWC  ? '<span class="bet-badge">🎯</span>' : '') +
       (risk > 0 ? '<span class="risk-badge">🎲+' + risk + '</span>' : '') +
       '<span class="bet-score">' + pred.homeScore + '-' + pred.awayScore + '</span>' +
       '<span class="bet-pts ' + ptsCls + '">' + ptsLbl + '</span>' +
@@ -1947,40 +2053,24 @@ function canUseWC(wcData, m) {
   return rem > 0 || isWCUsed(wcData, m);
 }
 
-function toggleWC(matchId) {
-  const m = matches.find(x=>x.id===matchId);
-  if (!m || isClosed(m)) return;
-  const wcs = DB.getWildcards();
-  let wcData = wcs[currentPlayer.id] || {};
-  const currently = isWCUsed(wcData, m);
-  if (currently) {
-    // Quitar comodín
-    if (m.phase==='grupos') {
-      if (!wcData.grupos) wcData.grupos={};
-      delete wcData.grupos[m.group];
-    } else {
-      if (!wcData[m.phase]) wcData[m.phase]=[];
-      wcData[m.phase] = Array.isArray(wcData[m.phase])
-        ? wcData[m.phase].filter(id=>id!==matchId)
-        : [];
-    }
-  } else {
-    // Poner comodín
-    const rem = wcRemaining(wcData, m.phase, m.group);
-    if (rem <= 0) { toast('No te quedan comodines en esta fase 🃏','err'); return; }
-    if (m.phase==='grupos') {
-      if (!wcData.grupos) wcData.grupos={};
-      wcData.grupos[m.group] = matchId;
-    } else {
-      if (!wcData[m.phase]) wcData[m.phase]=[];
-      if (!Array.isArray(wcData[m.phase])) wcData[m.phase]=[wcData[m.phase]];
-      wcData[m.phase].push(matchId);
-    }
+function checkPenSelector(matchId) {
+  const h = document.getElementById('h-'+matchId)?.value;
+  const a = document.getElementById('a-'+matchId)?.value;
+  const row = document.getElementById('pen-row-'+matchId);
+  if (!row) return;
+  const isDraw = h!=='' && a!=='' && parseInt(h)===parseInt(a);
+  row.style.display = isDraw ? 'block' : 'none';
+  if (!isDraw) {
+    document.getElementById('pen-h-'+matchId)?.classList.remove('active');
+    document.getElementById('pen-a-'+matchId)?.classList.remove('active');
   }
-  wcs[currentPlayer.id] = wcData;
-  DB.saveWildcards(wcs);
-  toast(currently?'Comodín quitado':'🃏 Comodín activado — puntos x2','ok');
-  renderView(currentView);
+}
+
+function setPenWinner(matchId, isHome) {
+  const hBtn = document.getElementById('pen-h-'+matchId);
+  const aBtn = document.getElementById('pen-a-'+matchId);
+  if (isHome) { hBtn?.classList.add('active'); aBtn?.classList.remove('active'); }
+  else        { aBtn?.classList.add('active'); hBtn?.classList.remove('active'); }
 }
 
 function savePred(matchId) {
@@ -1989,9 +2079,16 @@ function savePred(matchId) {
   if (h===''||a==='') { toast('Ingresá ambos marcadores','err'); return; }
   const m = matches.find(x => x.id === matchId);
   if (m && isClosed(m)) { toast('El partido ya no acepta pronósticos','err'); return; }
+  const hInt = parseInt(h), aInt = parseInt(a);
+  let penWinner = null;
+  if (PLAYOFF_PHASES.has(m?.phase) && hInt===aInt) {
+    if (document.getElementById('pen-h-'+matchId)?.classList.contains('active')) penWinner = m.homeCode;
+    else if (document.getElementById('pen-a-'+matchId)?.classList.contains('active')) penWinner = m.awayCode;
+  }
   const preds = DB.getPredictions();
   const idx   = preds.findIndex(p => p.playerId===currentPlayer.id && p.matchId===matchId);
-  const rec   = { id:genId(), playerId:currentPlayer.id, matchId, homeScore:parseInt(h), awayScore:parseInt(a) };
+  const rec   = { id:genId(), playerId:currentPlayer.id, matchId, homeScore:hInt, awayScore:aInt };
+  if (penWinner) rec.penWinner = penWinner;
   if (idx>=0) preds[idx]=rec; else preds.push(rec);
   DB.savePredictions(preds);
   const btn = document.getElementById('sv-'+matchId);
@@ -1999,28 +2096,54 @@ function savePred(matchId) {
   toast('Pronóstico guardado ✓','ok');
 }
 
-function toggleWC(matchId, phase) {
+function toggleWC(matchId) {
+  const m = matches.find(x=>x.id===matchId);
+  if (!m || isClosed(m)) return;
+  if ((WC_QUOTA[m.phase]||0) === 0) { toast('No hay redoblona disponible en esta fase','err'); return; }
   const wcs = DB.getWildcards();
-  if (!wcs[currentPlayer.id]) wcs[currentPlayer.id] = {};
-  const cur = wcs[currentPlayer.id][phase];
-  if (cur === matchId) {
-    delete wcs[currentPlayer.id][phase];
-    toast('Comodín liberado');
+  let wcData = wcs[currentPlayer.id] || {};
+  const currently = isWCUsed(wcData, m);
+  if (currently) {
+    if (m.phase==='grupos') {
+      if (!wcData.grupos) wcData.grupos={};
+      delete wcData.grupos[m.group];
+    } else {
+      const used = wcData[m.phase] || [];
+      const arr = Array.isArray(used) ? used : [used];
+      wcData[m.phase] = arr.filter(id=>id!==matchId);
+      if (wcData[m.phase].length===0) delete wcData[m.phase];
+    }
+    toast('Redoblona quitada');
   } else {
-    wcs[currentPlayer.id][phase] = matchId;
-    toast('🃏 Comodín activado — puntos ×2 para este partido','ok');
+    const rem = wcRemaining(wcData, m.phase, m.group);
+    if (rem <= 0) { toast('No te quedan redoblones en esta fase','err'); return; }
+    if (m.phase==='grupos') {
+      if (!wcData.grupos) wcData.grupos={};
+      wcData.grupos[m.group] = matchId;
+    } else {
+      if (!wcData[m.phase]) wcData[m.phase]=[];
+      if (!Array.isArray(wcData[m.phase])) wcData[m.phase]=[wcData[m.phase]];
+      wcData[m.phase].push(matchId);
+    }
+    toast('🎯 Redoblona activada — puntos ×2','ok');
   }
+  wcs[currentPlayer.id] = wcData;
   DB.saveWildcards(wcs);
-  renderView('predictions');
+  renderView(currentView);
 }
 
 function saveSpecial(type) {
-  const val = document.getElementById(type==='champion'?'sp-champ':'sp-scorer').value.trim();
+  if (new Date() >= MUNDIAL_START) { toast('Los pronósticos especiales están cerrados','err'); return; }
+  const idMap = { champion:'sp-champ', subCampeon:'sp-sub', tercerPuesto:'sp-third', scorer:'sp-scorer' };
+  const val = document.getElementById(idMap[type])?.value.trim();
   if (!val) { toast('Ingresá el valor','err'); return; }
   const specials = DB.getSpecial();
   let sp = specials.find(s => s.playerId===currentPlayer.id);
   if (!sp) { sp={id:genId(),playerId:currentPlayer.id}; specials.push(sp); }
-  if (type==='champion') sp.champion=val; else sp.topScorer=val;
+  if (type==='champion') sp.champion=val;
+  else if (type==='subCampeon') sp.subCampeon=val;
+  else if (type==='tercerPuesto') sp.tercerPuesto=val;
+  else sp.topScorer=val;
   DB.saveSpecial(specials);
   toast('Pronóstico especial guardado 🏆','ok');
   renderView('predictions');
@@ -2186,12 +2309,17 @@ function renderRanking(con) {
       else if (diff < 0) deltaHTML = '<span style="font-size:11px;color:var(--danger);font-weight:700;">▼'+Math.abs(diff)+'</span>';
       else               deltaHTML = '<span style="font-size:11px;color:var(--text-d);">═</span>';
     }
+    const unlockedAchs = ACHIEVEMENTS.filter(a => a.check(p, curRank));
+    const achLine = unlockedAchs.length
+      ? '<div style="font-size:13px;margin-top:2px;letter-spacing:.05em;" title="'+unlockedAchs.map(a=>a.title).join(' · ')+'">'+unlockedAchs.map(a=>a.icon).join('')+'</div>'
+      : '';
     tableHTML += '<div class="rank-row'+(isMe?' me':'')+'">'+
       '<span class="rank-num" style="color:'+(i<3?goldColors[i]:'var(--text-d)')+';">'+curRank+'</span>'+
       avaEl(p,36)+
       '<div class="rank-info">'+
         '<div class="rank-name">'+p.name+(isMe?' <span style="font-size:10px;color:var(--accent);">· vos</span>':'')+'</div>'+
         '<div class="rank-stats">🎯 '+p.exact+' exactos &nbsp;✓ '+p.partial+' parciales</div>'+
+        achLine+
       '</div>'+
       deltaHTML+
       (myMvps > 0 ? '<span class="mvp-badge">🏅 ×'+myMvps+'</span>' : '')+
@@ -2219,15 +2347,15 @@ function renderHistory(con) {
   let cardsHTML = '';
   for (const m of [...finished].reverse()) {
     const p    = preds.find(x => x.matchId===m.id);
-    const isWC = myWC[m.phase] === m.id;
-    let pts=0, pillC='pill-wrong', pillT='0 pts';
+    const isWC = isWCUsed(myWC, m);
+    let pillC='pill-wrong', pillT='0 pts';
+    let pts = 0;
 
     if (p) {
-      if (p.homeScore===m.homeScore && p.awayScore===m.awayScore) {
-        pts=isWC?6:3; pillC='pill-exact'; pillT=`+${pts} pts${isWC?' 🃏':''}`;
-      } else if (outcome(p.homeScore,p.awayScore)===outcome(m.homeScore,m.awayScore)) {
-        pts=isWC?2:1; pillC='pill-partial'; pillT=`+${pts} pts${isWC?' 🃏':''}`;
-      }
+      pts = ptsEarnedInMatch(currentPlayer.id, m.id);
+      const raw = calcPtsBase(p, m.homeScore, m.awayScore);
+      if (raw===5) { pillC='pill-exact'; pillT=`+${pts} pts${isWC?' 🎯':''}`; }
+      else if (raw>=3) { pillC='pill-partial'; pillT=`+${pts} pts${isWC?' 🎯':''}`; }
     }
 
     cardsHTML += `<div class="match-card">
@@ -2378,14 +2506,28 @@ function renderAdmin(con) {
     <div class="sec-title">Validar pronósticos especiales</div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div>
-        <div class="form-label">Campeón del Mundial (+15 pts)</div>
+        <div class="form-label">🥇 Campeón del Mundial (+15 pts)</div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="meta-champ" placeholder="País campeón" value="${meta.champion||''}">
           <button class="btn btn-gold" onclick="saveMeta('champion')" style="padding:10px 14px;">Guardar</button>
         </div>
       </div>
       <div>
-        <div class="form-label">Goleador del torneo (+10 pts)</div>
+        <div class="form-label">🥈 Subcampeón (+8 pts)</div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="meta-sub" placeholder="País subcampeón" value="${meta.subCampeon||''}">
+          <button class="btn btn-gold" onclick="saveMeta('subCampeon')" style="padding:10px 14px;">Guardar</button>
+        </div>
+      </div>
+      <div>
+        <div class="form-label">🥉 Tercer puesto (+5 pts)</div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="meta-third" placeholder="País tercer puesto" value="${meta.tercerPuesto||''}">
+          <button class="btn btn-gold" onclick="saveMeta('tercerPuesto')" style="padding:10px 14px;">Guardar</button>
+        </div>
+      </div>
+      <div>
+        <div class="form-label">⚽ Goleador del torneo (+10 pts)</div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="meta-scorer" placeholder="Nombre del jugador" value="${meta.topScorer||''}">
           <button class="btn btn-gold" onclick="saveMeta('scorer')" style="padding:10px 14px;">Guardar</button>
@@ -2495,10 +2637,14 @@ function adminClose(matchId) {
 }
 
 function saveMeta(type) {
-  const val = document.getElementById(type==='champion'?'meta-champ':'meta-scorer').value.trim();
+  const idMap = { champion:'meta-champ', subCampeon:'meta-sub', tercerPuesto:'meta-third', scorer:'meta-scorer' };
+  const val = document.getElementById(idMap[type])?.value.trim();
   if (!val) { toast('Ingresá el valor','err'); return; }
   const meta = DB.get('meta',{});
-  if (type==='champion') meta.champion=val; else meta.topScorer=val;
+  if (type==='champion') meta.champion=val;
+  else if (type==='subCampeon') meta.subCampeon=val;
+  else if (type==='tercerPuesto') meta.tercerPuesto=val;
+  else meta.topScorer=val;
   DB.set('meta',meta);
   toast('Guardado — se recalculan los puntos especiales ✓','ok');
 }
@@ -2737,8 +2883,8 @@ function getRulesContent(tab) {
         </tr>
         <tr>
           <td class="pts-val" style="color:var(--gold);">×2</td>
-          <td><div class="pts-desc"><strong>Comodín activado</strong></div>
-              <div class="pts-sub">Duplica todos los puntos de ese partido. Si hacés 3, cobrás 6. Si hacés 0, no cambia nada.</div></td>
+          <td><div class="pts-desc"><strong>🎯 Redoblona activada</strong></div>
+              <div class="pts-sub">Duplica todos los puntos de ese partido (incluye bonus penales). Si hacés 0, no cambia nada.</div></td>
         </tr>
         <tr>
           <td class="pts-val" style="color:var(--danger);">0</td>
@@ -2769,8 +2915,8 @@ function getRulesContent(tab) {
           <span class="example-pts" style="color:var(--danger);">0 pts</span>
         </div>
         <div class="example-row" style="border-bottom:none;">
-          <span>Apostás 2-1 con comodín activado</span>
-          <span class="example-pts" style="color:var(--accent);">10 pts 🃏</span>
+          <span>Apostás 2-1 con redoblona activada</span>
+          <span class="example-pts" style="color:var(--accent);">10 pts 🎯</span>
         </div>
       </div>
     </div>
@@ -2786,58 +2932,51 @@ function getRulesContent(tab) {
 
   if (tab === 'comodines') return `
     <div class="rules-section">
-      <div class="rules-section-title">¿Qué es el comodín?</div>
+      <div class="rules-section-title">¿Qué es la redoblona?</div>
       <p style="font-size:13px;color:var(--text-m);line-height:1.6;margin-bottom:12px;">
-        El comodín <strong style="color:var(--text);">duplica los puntos</strong> que ganás en un partido. Si acertás 3 pts, cobrás 6. Si acertás 5 pts, cobrás 10. Si perdés (0 pts), el comodín no hace nada — no se desperdicia, pero se descuenta igual.
+        La redoblona 🎯 <strong style="color:var(--text);">duplica todos los puntos</strong> que ganás en ese partido (incluido el bonus de penales). Si perdés (0 pts), la redoblona no hace nada — se descuenta igual.
       </p>
       <p style="font-size:12px;color:var(--text-m);line-height:1.5;padding:10px 12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border-md);">
-        ⚠️ El comodín se asigna <strong>antes</strong> del inicio del partido. Una vez que arranca no se puede cambiar.
+        ⚠️ La redoblona se asigna <strong>antes</strong> del inicio del partido. Una vez que arranca no se puede cambiar.
       </p>
     </div>
 
     <div class="rules-section">
-      <div class="rules-section-title">Comodines disponibles por fase</div>
+      <div class="rules-section-title">Redoblones disponibles por fase</div>
       <div class="wc-phase-grid">
         <div class="wc-phase-item">
           <span class="wc-count">1</span>
           <div class="wc-info">
-            <div class="wc-phase-name">Por grupo</div>
-            <div class="wc-phase-detail">Grupos A · B · C · ... · L<br>1 comodín por cada grupo = 12 en total</div>
+            <div class="wc-phase-name">Por grupo (×1 pts)</div>
+            <div class="wc-phase-detail">Grupos A · B · C · ... · L<br>1 redoblona por cada grupo = 12 en total</div>
           </div>
         </div>
         <div class="wc-phase-item">
           <span class="wc-count">2</span>
           <div class="wc-info">
-            <div class="wc-phase-name">16vos de Final</div>
-            <div class="wc-phase-detail">2 comodines para repartir entre los 16 partidos</div>
-          </div>
-        </div>
-        <div class="wc-phase-item">
-          <span class="wc-count">2</span>
-          <div class="wc-info">
-            <div class="wc-phase-name">8vos de Final</div>
-            <div class="wc-phase-detail">2 comodines para los 8 partidos</div>
+            <div class="wc-phase-name">16vos de Final (×2 pts)</div>
+            <div class="wc-phase-detail">2 redoblones para repartir entre los 16 partidos</div>
           </div>
         </div>
         <div class="wc-phase-item">
           <span class="wc-count">1</span>
           <div class="wc-info">
-            <div class="wc-phase-name">Cuartos de Final</div>
-            <div class="wc-phase-detail">1 comodín para los 4 partidos</div>
+            <div class="wc-phase-name">8vos de Final (×3 pts)</div>
+            <div class="wc-phase-detail">1 redoblona para los 8 partidos</div>
           </div>
         </div>
         <div class="wc-phase-item">
           <span class="wc-count">1</span>
           <div class="wc-info">
-            <div class="wc-phase-name">Semifinales</div>
-            <div class="wc-phase-detail">1 comodín para 2 partidos</div>
+            <div class="wc-phase-name">Cuartos de Final (×4 pts)</div>
+            <div class="wc-phase-detail">1 redoblona para los 4 partidos</div>
           </div>
         </div>
         <div class="wc-phase-item">
-          <span class="wc-count">1</span>
+          <span class="wc-count">—</span>
           <div class="wc-info">
-            <div class="wc-phase-name">Final + 3er Puesto</div>
-            <div class="wc-phase-detail">1 comodín en total para estos 2 partidos</div>
+            <div class="wc-phase-name">Semis · 3er Puesto · Final</div>
+            <div class="wc-phase-detail">Sin redoblona en estas fases (×5 / ×5 / ×7 pts base)</div>
           </div>
         </div>
       </div>
@@ -2846,9 +2985,9 @@ function getRulesContent(tab) {
     <div class="rules-section">
       <div class="rules-section-title">Estrategia sugerida</div>
       <div style="font-size:13px;color:var(--text-m);line-height:1.7;">
-        🎯 Usalo en partidos donde estás muy seguro del resultado exacto — un comodín en un exacto vale 10 pts.<br><br>
-        ⚡ En playoffs, el comodín multiplica también el bonus de penales, por lo que el techo sube aún más.<br><br>
-        🃏 En grupos, guardate el comodín para los partidos de la última jornada — cuando ya sabés más sobre los equipos.
+        🎯 Usala en partidos donde estás muy seguro del resultado exacto — una redoblona en un exacto de Cuartos vale 40 pts.<br><br>
+        ⚡ En playoffs, la redoblona también duplica el bonus de penales, por lo que el techo sube aún más.<br><br>
+        📅 En grupos, guardate la redoblona para la última jornada — cuando ya sabés más sobre los equipos.
       </div>
     </div>`;
 
@@ -2877,29 +3016,35 @@ function getRulesContent(tab) {
     </div>
 
     <div class="rules-section">
-      <div class="rules-section-title">Bonus por penales <span style="color:var(--gold);">+1 pt</span></div>
+      <div class="rules-section-title">Multiplicadores por fase</div>
+      <div style="font-size:13px;color:var(--text-m);line-height:1.8;">
+        16vos <strong style="color:var(--accent);">×2</strong> &nbsp;·&nbsp;
+        8vos <strong style="color:var(--accent);">×3</strong> &nbsp;·&nbsp;
+        Cuartos <strong style="color:var(--accent);">×4</strong> &nbsp;·&nbsp;
+        Semis <strong style="color:var(--accent);">×5</strong> &nbsp;·&nbsp;
+        3er Puesto <strong style="color:var(--accent);">×5</strong> &nbsp;·&nbsp;
+        Final <strong style="color:var(--accent);">×7</strong>
+      </div>
+    </div>
+
+    <div class="rules-section">
+      <div class="rules-section-title">Bonus por penales (si pronosticás empate)</div>
       <p style="font-size:13px;color:var(--text-m);line-height:1.6;margin-bottom:10px;">
-        Si el partido llega a penales, podés sumar <strong style="color:var(--gold);">1 punto extra</strong> si acertás qué equipo gana la tanda.
+        Si pronosticás empate en una fase de mata-mata, podés elegir quién gana en penales. Si acertás:
       </p>
       <div class="example-box">
-        <div class="example-title">Partido de 16vos: Brasil 1 - España 1 (Brasil gana en penales)</div>
-        <div class="example-row">
-          <span>Apostás 1-1 + Brasil gana penales</span>
-          <span class="example-pts" style="color:var(--accent);">5+1 = 6 pts</span>
-        </div>
-        <div class="example-row">
-          <span>Apostás 1-1 + España gana penales</span>
-          <span class="example-pts" style="color:var(--accent);">5 pts</span>
-        </div>
-        <div class="example-row">
-          <span>Apostás 2-0 (ganador correcto, no exacto)</span>
-          <span class="example-pts" style="color:var(--gold);">3 pts</span>
-        </div>
-        <div class="example-row" style="border-bottom:none;">
-          <span>Apostás 1-1 con comodín + Brasil penales</span>
-          <span class="example-pts" style="color:var(--accent);">12 pts 🃏</span>
-        </div>
+        <div class="example-row"><span>16vos de Final</span><span class="example-pts" style="color:var(--gold);">+2 pts</span></div>
+        <div class="example-row"><span>8vos de Final</span><span class="example-pts" style="color:var(--gold);">+4 pts</span></div>
+        <div class="example-row"><span>Cuartos de Final</span><span class="example-pts" style="color:var(--gold);">+6 pts</span></div>
+        <div class="example-row"><span>Semifinales</span><span class="example-pts" style="color:var(--gold);">+8 pts</span></div>
+        <div class="example-row"><span>3er Puesto</span><span class="example-pts" style="color:var(--gold);">+10 pts</span></div>
+        <div class="example-row" style="border-bottom:none;"><span>Final</span><span class="example-pts" style="color:var(--gold);">+12 pts</span></div>
       </div>
+      <p style="font-size:12px;color:var(--text-m);margin-top:10px;line-height:1.5;">
+        Ejemplo en 16vos — Brasil 1-1 España (Brasil gana penales):<br>
+        Apostás 1-1 + Brasil penales → 5 × 2 + 2 = <strong style="color:var(--accent);">12 pts</strong><br>
+        Con redoblona → (5×2+2) × 2 = <strong style="color:var(--accent);">24 pts 🎯</strong>
+      </p>
     </div>`;
 
   if (tab === 'especiales') return `
@@ -2939,7 +3084,7 @@ function getRulesContent(tab) {
         ✗ No podés cambiar estos pronósticos una vez confirmados<br>
         ✗ Si no los cargás antes del primer partido, perdés esos puntos<br>
         ✓ Son anónimos hasta que el torneo termine<br>
-        ✓ Los puntos son independientes de los comodines
+        ✓ Los puntos son independientes de las redoblones
       </div>
     </div>`;
 
@@ -2957,8 +3102,8 @@ function getRulesContent(tab) {
       <div class="faq-a">Solo cuando el partido ya arrancó (estado "en juego") o terminó. Antes del inicio solo ves las tendencias globales (% local / empate / visitante), pero no quién apostó qué.</div>
     </div>
     <div class="faq-item">
-      <div class="faq-q">¿Puedo recuperar un comodín que activé por error?</div>
-      <div class="faq-a">Sí, podés quitarlo mientras el partido no haya empezado. Una vez que arranca, el comodín queda bloqueado junto con el pronóstico.</div>
+      <div class="faq-q">¿Puedo recuperar una redoblona que activé por error?</div>
+      <div class="faq-a">Sí, podés quitarla mientras el partido no haya empezado. Una vez que arranca, la redoblona queda bloqueada junto con el pronóstico.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">¿Qué pasa si no aposté en un partido?</div>
@@ -2969,8 +3114,8 @@ function getRulesContent(tab) {
       <div class="faq-a">El ranking muestra los puntos confirmados (partidos terminados) más los puntos provisorios del marcador actual en curso. Estos últimos pueden cambiar con cada gol.</div>
     </div>
     <div class="faq-item">
-      <div class="faq-q">¿En qué casos el comodín no sirve de nada?</div>
-      <div class="faq-a">Si tu pronóstico es incorrecto (0 pts), el comodín no cambia nada. Solo multiplica si ya ganaste algún punto.</div>
+      <div class="faq-q">¿En qué casos la redoblona no sirve de nada?</div>
+      <div class="faq-a">Si tu pronóstico es incorrecto (0 pts), la redoblona no cambia nada. Solo multiplica si ya ganaste algún punto.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">¿Qué significa "bonus diferencia de goles"?</div>
