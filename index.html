@@ -1787,7 +1787,7 @@ function renderPredictions(con) {
       <div class="form-label">${label}</div>
       <div style="display:flex;gap:8px;">
         <input type="text" id="${id}" placeholder="${placeholder}" style="flex:1;" value="${val}">
-        <button class="btn btn-gold" onclick="saveSpecial('${type}')" style="padding:10px 14px;">Guardar</button>
+        <button class="btn btn-gold" onclick="saveSpecial('${type}')" style="padding:10px 14px;">${val ? 'Actualizar' : 'Guardar'}</button>
       </div>
     </div>`;
   };

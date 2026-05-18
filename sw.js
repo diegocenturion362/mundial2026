@@ -1,5 +1,5 @@
 // ── MUN'26 Service Worker ──
-const CACHE_NAME = 'mun26-v1';
+const CACHE_NAME = 'mun26-v2';
 
 // Archivos que se cachean al instalar
 const PRECACHE = [
@@ -29,7 +29,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ── Fetch: network-first para datos, cache-first para assets ──
+// ── Fetch: network-first para HTML, cache-first para assets estáticos ──
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
@@ -44,25 +44,31 @@ self.addEventListener('fetch', event => {
     url.hostname.includes('fonts.gstatic.com')
   ) return;
 
-  // Para la app shell: cache-first con fallback a red
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) {
-        // Devuelve caché inmediatamente, actualiza en background
-        const fetchPromise = fetch(event.request).then(res => {
-          if (res && res.status === 200) {
-            caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
-          }
-          return res;
-        }).catch(() => {});
-        return cached;
-      }
-      // Sin caché: ir a la red
-      return fetch(event.request).then(res => {
-        if (!res || res.status !== 200 || res.type === 'opaque') return res;
-        caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
+  const isHTML = event.request.mode === 'navigate' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('/');
+
+  if (isHTML) {
+    // Network-first para el HTML: siempre intenta la red, usa caché solo si falla
+    event.respondWith(
+      fetch(event.request).then(res => {
+        if (res && res.status === 200) {
+          caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
+        }
         return res;
-      }).catch(() => caches.match('/mundial2026/'));
-    })
-  );
+      }).catch(() => caches.match(event.request).then(c => c || caches.match('/mundial2026/')))
+    );
+  } else {
+    // Cache-first para assets estáticos (iconos, manifest)
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(res => {
+          if (!res || res.status !== 200 || res.type === 'opaque') return res;
+          caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
+          return res;
+        }).catch(() => caches.match('/mundial2026/'));
+      })
+    );
+  }
 });
