@@ -658,7 +658,7 @@ async function loadFifaMatches({ silent = false } = {}) {
     // Snapshot de qué partidos estaban finalizados ANTES de actualizar
     const prevFinished = new Set(matches.filter(m => m.status === 'finished').map(m => m.id));
 
-    // Merge: preservar overrides manuales
+    // PRUEBA: preservar SIEMPRE el estado y marcador fijado manualmente por el admin
     const existing = Object.fromEntries(matches.map(m => [m.id, m]));
     const fresh = (data.Results || [])
       .map(normalizeFifaMatch)
@@ -666,11 +666,17 @@ async function loadFifaMatches({ silent = false } = {}) {
 
     for (const m of fresh) {
       const ex = existing[m.id];
-      if (ex && ex.status === 'finished' && ex.homeScore !== null && m.status !== 'finished') {
-        m.status = ex.status; m.homeScore = ex.homeScore; m.awayScore = ex.awayScore;
-      }
-      if (ex && ex.status === 'closed' && m.status === 'upcoming') {
-        m.status = 'closed';
+      if (ex) {
+        // Partido ya conocido: tomar fixture de FIFA pero respetar estado/marcador manual
+        m.status    = ex.status;
+        m.homeScore = ex.homeScore;
+        m.awayScore = ex.awayScore;
+        if (ex.penWinner) m.penWinner = ex.penWinner;
+      } else {
+        // Partido nuevo que llega de FIFA: siempre empieza como pending
+        m.status    = 'pending';
+        m.homeScore = null;
+        m.awayScore = null;
       }
     }
 
@@ -1768,8 +1774,9 @@ function renderPredictions(con) {
   const special = DB.getSpecial().find(s => s.playerId === currentPlayer.id);
 
   // Franja FIFA
-  let html = `<div class="fifa-strip" style="background:rgba(124,45,18,.15);border-color:rgba(124,45,18,.4);">
-    <span class="fifa-source" style="color:#fb923c;">⚠️ MODO PRUEBA — partidos cargados manualmente</span>
+  let html = `<div class="fifa-strip" style="background:rgba(124,45,18,.12);border-color:rgba(124,45,18,.3);">
+    <span class="fifa-source" style="color:#fb923c;">⚠️ PRUEBA · Fixture: ${fifaSource} · Resultados: manual</span>
+    <button class="fifa-refresh-btn" onclick="loadFifaMatches()" ${fifaLoading?'disabled':''}>↻ Fixture</button>
   </div>`;
 
   html += reglHtml;
@@ -2466,42 +2473,20 @@ function renderAdmin(con) {
   const meta     = DB.get('meta', {});
 
   con.innerHTML = `
-  <!-- Agregar partido -->
+  <!-- Fixture FIFA -->
   <div class="admin-section">
-    <div class="sec-title">➕ Agregar partido</div>
-    <div style="display:flex;flex-direction:column;gap:8px;">
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1;"><div class="form-label">Local</div><input type="text" id="nm-home" placeholder="Ej: Argentina" style="width:100%;"></div>
-        <div style="width:72px;"><div class="form-label">Código</div><input type="text" id="nm-home-code" placeholder="ARG" maxlength="3" style="width:100%;text-transform:uppercase;"></div>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1;"><div class="form-label">Visitante</div><input type="text" id="nm-away" placeholder="Ej: Brasil" style="width:100%;"></div>
-        <div style="width:72px;"><div class="form-label">Código</div><input type="text" id="nm-away-code" placeholder="BRA" maxlength="3" style="width:100%;text-transform:uppercase;"></div>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1;">
-          <div class="form-label">Fase</div>
-          <select id="nm-phase" style="width:100%;padding:9px;border-radius:8px;background:var(--bg-el);border:.5px solid var(--border);color:var(--text);">
-            <option value="grupos">Fase de Grupos</option>
-            <option value="r32">16vos de Final</option>
-            <option value="r16">8vos de Final</option>
-            <option value="qf">Cuartos de Final</option>
-            <option value="sf">Semifinales</option>
-            <option value="third">Tercer Puesto</option>
-            <option value="final">Final</option>
-          </select>
-        </div>
-        <div style="width:64px;"><div class="form-label">Grupo</div><input type="text" id="nm-group" placeholder="A" maxlength="1" style="width:100%;text-transform:uppercase;"></div>
-      </div>
-      <div><div class="form-label">Fecha y hora</div><input type="datetime-local" id="nm-kickoff" style="width:100%;"></div>
-      <button class="btn btn-primary" onclick="adminAddMatch()" style="width:100%;padding:11px;">Crear partido</button>
+    <div class="sec-title">📡 Fixture desde FIFA</div>
+    <p style="font-size:12px;color:var(--text-m);margin-bottom:10px;">Cargá el fixture oficial (equipos, fechas, grupos). El estado y los resultados de cada partido los cargás vos manualmente abajo.</p>
+    <div class="fifa-strip" style="margin-bottom:0;">
+      <span class="fifa-source">${fifaSource}</span>
+      <button class="fifa-refresh-btn btn btn-primary" onclick="loadFifaMatches()" style="padding:7px 14px;font-size:13px;" ${fifaLoading?'disabled':''}>↻ Cargar fixture de FIFA</button>
     </div>
   </div>
 
-  <!-- Lista de partidos -->
+  <!-- Lista de partidos con controles manuales -->
   <div class="admin-section">
-    <div class="sec-title">📋 Partidos (${matches.length})</div>
-    ${!matches.length ? '<p style="font-size:12px;color:var(--text-d);">No hay partidos. Agregá uno arriba.</p>' : ''}
+    <div class="sec-title">⚙️ Resultados manuales (${matches.length} partidos)</div>
+    ${!matches.length ? '<p style="font-size:12px;color:var(--text-d);">Sin partidos. Cargá el fixture desde FIFA primero.</p>' : ''}
     ${matches.map(m=>`
       <div style="padding:12px 14px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border);margin-bottom:8px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:10px;">${m.homeTeam} vs ${m.awayTeam}
@@ -2963,7 +2948,8 @@ function clearAll() {
   }
   if (!autoLogged) renderPlayerSelect();
 
-  // 6. Versión PRUEBA — los partidos se gestionan manualmente desde el Admin
+  // 6. Cargar fixture desde FIFA (solo estructura — estado y marcador se controlan manualmente)
+  loadFifaMatches({ silent: true });
 
   // 7. Registrar Service Worker (PWA)
   if ('serviceWorker' in navigator) {
