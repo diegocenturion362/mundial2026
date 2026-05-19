@@ -483,6 +483,8 @@ const DB = {
   saveSpecial:     v  => DB.set('special', v),
   getSnapshots:    ()  => DB.get('rank_snaps', []),
   saveSnapshots:   v  => DB.set('rank_snaps', v),
+  getChat:    (matchId) => DB.get('chat_' + matchId, []),
+  saveChat:   (matchId, v) => DB.set('chat_' + matchId, v),
 };
 
 // ── Listeners de tiempo real ──
@@ -1242,7 +1244,7 @@ function allScores() {
 
 function provPtsForMatch(playerId, matchId) {
   const m = matches.find(x=>x.id===matchId);
-  if (!m||m.homeScore===null) return null;
+  if (!m||m.homeScore===null||m.awayScore===null) return 0;
   const p = DB.getPredictions().find(x=>x.playerId===playerId&&x.matchId===matchId);
   if (!p) return null;
   const wcData = DB.getWildcards()[playerId]||{};
