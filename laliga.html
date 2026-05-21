@@ -1019,9 +1019,54 @@ function navigate(view) {
   renderView(view);
 }
 
+// ── Preservar inputs no guardados al re-renderizar Pronósticos ──
+function capturePredState() {
+  const state = { scores: {}, penWinners: {}, specials: {} };
+  // Captura score boxes con valores no guardados
+  document.querySelectorAll('input.score-box').forEach(inp => {
+    if (inp.value !== '' && !inp.disabled) state.scores[inp.id] = inp.value;
+  });
+  // Captura selección de penales activa
+  document.querySelectorAll('button.pen-btn.active').forEach(btn => {
+    const isHome = btn.id.startsWith('pen-h-');
+    const matchId = btn.id.slice(6); // quita 'pen-h-' o 'pen-a-'
+    state.penWinners[matchId] = isHome ? 'home' : 'away';
+  });
+  // Captura inputs especiales (campeón, subcampeón, etc.) si están abiertos
+  ['sp-champ','sp-sub','sp-third','sp-scorer'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.disabled && el.value.trim() !== '') state.specials[id] = el.value;
+  });
+  return state;
+}
+
+function restorePredState(state) {
+  // Restaura scores y recolecta matchIds afectados
+  const restoredIds = new Set();
+  Object.entries(state.scores).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el && !el.disabled) { el.value = val; restoredIds.add(id.slice(2)); }
+  });
+  // Actualiza visibilidad del selector de penales para cada partido restaurado
+  restoredIds.forEach(matchId => checkPenSelector(matchId));
+  // Restaura selección de penales
+  Object.entries(state.penWinners).forEach(([matchId, side]) => {
+    setPenWinner(matchId, side === 'home');
+  });
+  // Restaura inputs especiales
+  Object.entries(state.specials).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el && !el.disabled) el.value = val;
+  });
+}
+
 function renderView(v) {
   const c = document.getElementById('main-content');
-  if      (v === 'predictions') renderPredictions(c);
+  if (v === 'predictions') {
+    const saved = capturePredState();
+    renderPredictions(c);
+    restorePredState(saved);
+  }
   else if (v === 'ranking')     renderRanking(c);
   else if (v === 'grupos')      renderGrupos(c);
   else if (v === 'perfil')      renderPerfil(c);
