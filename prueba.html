@@ -2018,6 +2018,7 @@ function renderPredictions(con) {
                 ${!closed&&PLAYOFF_PHASES.has(m.phase)?`oninput="checkPenSelector('${m.id}')"`:''}>
             </div>
             ${isLiveMatch?`<div style="font-size:11px;font-weight:700;color:#f97316;letter-spacing:.03em;">${liveTimeStr}</div>`:''}
+            ${isLiveMatch&&m.homeScore!==null?`<div style="font-size:15px;font-weight:800;color:#f97316;font-family:var(--fd);letter-spacing:.05em;">${m.homeScore}–${m.awayScore}</div>`:''}
           </div>
           <div class="team-side">
             <div class="team-flag">${renderFlag(m.awayCode, m.awayTeam)}</div>
@@ -2053,11 +2054,13 @@ function renderPredictions(con) {
                 </button>`
               : ''}
           <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
-            ${closed
+            ${closed&&m.status!=='live'
               ? `<span class="pill pill-info">${pred!=null?pred.homeScore+'-'+pred.awayScore:'Sin pronóstico'}</span>`
-              : pred!=null
+              : !closed&&pred!=null
                 ? `<button class="btn-save editing" id="sv-${m.id}" onclick="savePred('${m.id}')">✏️ Actualizar</button>`
-                : `<button class="btn-save" id="sv-${m.id}" onclick="savePred('${m.id}')">Guardar</button>`}
+                : !closed
+                  ? `<button class="btn-save" id="sv-${m.id}" onclick="savePred('${m.id}')">Guardar</button>`
+                  : ''}
 
           </div>
         </div>
