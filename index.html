@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -482,6 +482,8 @@ const DB = {
   saveSpecial:     v  => DB.set('special', v),
   getSnapshots:    ()  => DB.get('rank_snaps', []),
   saveSnapshots:   v  => DB.set('rank_snaps', v),
+  getChat:    (matchId) => DB.get('chat_' + matchId, []),
+  saveChat:   (matchId, v) => DB.set('chat_' + matchId, v),
 };
 
 // ── Listeners de tiempo real ──
@@ -511,6 +513,23 @@ function setupFirebaseListeners(db) {
         renderView(currentView);
       }
     });
+  });
+
+  // ── Listener en tiempo real para partidos (estado/marcador cambiado por el admin) ──
+  db.ref(FB_ROOT + '/fifa_matches').on('value', snap => {
+    const raw = snap.val();
+    if (!raw) return;
+    const val = normalizeFirebaseValue(raw);
+    if (!Array.isArray(val) || !val.length) return;
+    const prev = JSON.stringify(matches);
+    const next = JSON.stringify(val);
+    if (prev === next) return;          // sin cambios, no re-renderizar
+    matches = val;
+    // Guardar solo en localStorage (evitar loop de escritura Firebase→listener→Firebase)
+    try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(matches)); } catch(e) {}
+    if (currentPlayer && !document.activeElement?.matches('input,textarea,select')) {
+      renderView(currentView);
+    }
   });
 }
 
@@ -742,6 +761,10 @@ const PHASES = {
 // ╚══════════════════════════════════════════════════╝
 let currentPlayer = null;
 let currentView   = 'predictions';
+let predSortMode    = 'fase';   // 'fecha' | 'grupo' | 'fase'
+let apuestasSortMode = 'fecha'; // 'fecha' | 'grupo' | 'fase'
+function setPredSort(mode)    { predSortMode    = mode; renderView('predictions'); }
+function setApuestasSort(mode){ apuestasSortMode = mode; renderView('misapuestas'); }
 let adminAuth     = false;
 
 // ╔══════════════════════════════════════════════════╗
@@ -756,7 +779,7 @@ function fmtDate(d) {
   try {
     return new Intl.DateTimeFormat('es-PY', {
       weekday:'short', day:'2-digit', month:'short',
-      hour:'2-digit', minute:'2-digit'
+      hour:'2-digit', minute:'2-digit', hour12: false
     }).format(new Date(d));
   } catch { return d || ''; }
 }
@@ -1412,7 +1435,38 @@ function renderMisApuestas(con) {
     '<button class="btn btn-secondary btn-sm" onclick="filterApuestas(\'exact\')" id="fa-exact">🎯 Exactos</button>'+
     '<button class="btn btn-secondary btn-sm" onclick="filterApuestas(\'wrong\')" id="fa-wrong">✗ Perdidos</button>'+
     '</div><div id="apuestas-list">';
-  for (const m of allM) {
+
+  // ── Barra de ordenamiento ──
+  html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px;">'+
+    '<span style="font-size:11px;color:var(--text-m);white-space:nowrap;flex-shrink:0;">Ordenar:</span>'+
+    '<button class="btn btn-secondary btn-sm'+(apuestasSortMode==='fecha'?' btn-primary':'')+'" onclick="setApuestasSort(\'fecha\')">📅 Fecha</button>'+
+    '<button class="btn btn-secondary btn-sm'+(apuestasSortMode==='grupo'?' btn-primary':'')+'" onclick="setApuestasSort(\'grupo\')">👥 Grupo</button>'+
+    '<button class="btn btn-secondary btn-sm'+(apuestasSortMode==='fase'?' btn-primary':'')+'" onclick="setApuestasSort(\'fase\')">🏆 Fase</button>'+
+  '</div>';
+
+  // ── Grupos de apuestas según ordenamiento ──
+  const apuestaGroups = [];
+  if (apuestasSortMode === 'grupo') {
+    const byKey={}, keyOrder=[];
+    for(const m of allM){
+      const key=m.group&&m.group!=='?'?m.group:(m.phase||'?');
+      if(!byKey[key]){byKey[key]=[];keyOrder.push(key);}
+      byKey[key].push(m);
+    }
+    keyOrder.sort((a,b)=>{const aG=/^[A-Z]$/.test(a),bG=/^[A-Z]$/.test(b);if(aG&&bG)return a.localeCompare(b);if(aG)return -1;if(bG)return 1;return Object.keys(PHASES).indexOf(a)-Object.keys(PHASES).indexOf(b);});
+    for(const key of keyOrder) apuestaGroups.push({hdr:/^[A-Z]$/.test(key)?'Grupo '+key:(PHASES[key]||key),matches:byKey[key]});
+  } else if (apuestasSortMode === 'fase') {
+    const byPhase={};
+    for(const m of allM){(byPhase[m.phase]=byPhase[m.phase]||[]).push(m);}
+    const phOrd=Object.keys(PHASES);
+    Object.keys(byPhase).sort((a,b)=>phOrd.indexOf(a)-phOrd.indexOf(b)).forEach(ph=>apuestaGroups.push({hdr:PHASES[ph]||ph,matches:byPhase[ph]}));
+  } else {
+    apuestaGroups.push({matches:allM});
+  }
+
+  for(const grp of apuestaGroups){
+    if(grp.hdr) html+='<div style="font-size:11px;font-weight:600;color:var(--text-m);text-transform:uppercase;letter-spacing:.06em;padding:6px 2px 4px;margin-top:2px;">'+grp.hdr+'</div>';
+    for (const m of grp.matches) {
     const pred=myPreds.find(p=>p.matchId===m.id);
     const isWC=isWCUsed(wcData, m);
     const pp=pred&&m.homeScore!==null?provPtsForMatch(currentPlayer.id,m.id):null;
@@ -1435,15 +1489,17 @@ function renderMisApuestas(con) {
       '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
       m.homeTeam+' vs '+m.awayTeam+(isWC?' 🎯':'')+'</div>'+
       '<div style="font-size:11px;color:var(--text-m);">'+(PHASES[m.phase]||m.phase)+(m.group?' · Gr.'+m.group:'')+
-      (isLive?' <span class="live-badge"><span class="live-dot"></span>En vivo</span>':'')+
+      (isLive?' <span class="live-badge"><span class="live-dot"></span>'+(m.homeScore!==null?m.homeScore+'-'+m.awayScore+' · ':'')+'En vivo</span>':'')+
       (isFin&&m.homeScore!==null?' · '+m.homeScore+'-'+m.awayScore:'')+
       '</div></div>'+
       '<div style="text-align:right;flex-shrink:0;">'+
       (pred?'<div style="font-family:var(--fd);font-size:15px;font-weight:700;">'+pred.homeScore+'-'+pred.awayScore+'</div>':'')+
+      (m.homeScore!==null&&(isLive||isFin)?'<div style="font-size:10px;font-weight:600;margin-top:2px;color:'+(isLive?'#f97316':'var(--text-m)')+'">'+(isLive?'⏱ ':'✅ ')+m.homeScore+'-'+m.awayScore+'</div>':'')+
       '<div class="bet-pts '+ptsCls+'">'+ptsStr+'</div></div>'+
       (isOpen&&!pred?'<button class="btn-save" onclick="navigate(\'predictions\')" style="flex-shrink:0;padding:5px 10px;font-size:11px;">Cargar</button>':'')+
       '</div>';
-  }
+    }   // cierra: for (const m of grp.matches)
+  }     // cierra: for (const grp of apuestaGroups)
   html+='</div>';
   con.innerHTML=html;
 }
@@ -1825,52 +1881,29 @@ function renderPredictions(con) {
     </div>
   </div>`;
 
-  // Partidos no finalizados, agrupados por fase
-  const upcoming = matches.filter(m => m.status !== 'finished');
-  if (!upcoming.length) {
-    html += `<div class="empty"><div class="empty-icon">🎉</div><p>¡Todos los partidos están finalizados!</p></div>`;
-    con.innerHTML = html; return;
-  }
+  // ── Barra de ordenamiento ──
+  html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px;">
+    <span style="font-size:11px;color:var(--text-m);white-space:nowrap;flex-shrink:0;">Ordenar:</span>
+    <button class="btn btn-secondary btn-sm${predSortMode==='fase'?' btn-primary':''}" onclick="setPredSort('fase')">🏆 Fase</button>
+    <button class="btn btn-secondary btn-sm${predSortMode==='grupo'?' btn-primary':''}" onclick="setPredSort('grupo')">👥 Grupo</button>
+    <button class="btn btn-secondary btn-sm${predSortMode==='fecha'?' btn-primary':''}" onclick="setPredSort('fecha')">📅 Fecha</button>
+  </div>`;
 
-  const byPhase = {};
-  for (const m of upcoming) {
-    (byPhase[m.phase] = byPhase[m.phase]||[]).push(m);
-  }
-  const phaseOrder = Object.keys(PHASES);
-  const sortedPhases = Object.keys(byPhase).sort((a,b) => phaseOrder.indexOf(a)-phaseOrder.indexOf(b));
-
+  const allSorted    = [...matches].sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
+  const upcoming     = allSorted.filter(m => m.status !== 'finished');
+  const finishedList = allSorted.filter(m => m.status === 'finished').reverse();
   const imprevisibleId = getImprevisibleMatchId();
 
-  for (const phase of sortedPhases) {
-    const phaseMatches = byPhase[phase];
-    const quota = WC_QUOTA[phase] || 0;
-    const mult  = PHASE_MULT[phase] || 1;
-
-    const multTag = mult > 1
-      ? `<span style="color:var(--text-m);font-size:11px;margin-left:6px;font-weight:500;">×${mult} pts</span>` : '';
-    let wcTag = '';
-    if (quota > 0) {
-      if (phase === 'grupos') {
-        wcTag = `<span style="color:var(--gold);font-size:11px;margin-left:6px;">🎯 1 redoblona por grupo</span>`;
-      } else {
-        const rem = wcRemaining(myWC, phase, '');
-        if (rem > 0) wcTag = `<span style="color:var(--gold);font-size:11px;margin-left:6px;">🎯 ${rem} redoblona${rem>1?'s':''} disponible${rem>1?'s':''}</span>`;
-      }
-    }
-    html += `<div class="sec-title">${PHASES[phase]||phase}${multTag}${wcTag}</div>`;
-
-    for (const m of phaseMatches) {
-      const pred   = preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id);
-      const closed = isClosed(m);
-      const isWC   = isWCUsed(myWC, m);
-      const rem    = wcRemaining(myWC, m.phase, m.group);
-      const canWC  = quota > 0 && (rem > 0 || isWC);
-
-      // Meta line: group + date + venue
-      const metaLeft  = m.group && m.group !== '?' ? `Grupo ${m.group}` : (PHASES[phase]||phase);
-      const metaRight = fmtDate(m.kickoff || m.date);
-
-      html += `<div class="match-card ${pred?'has-pred':''} ${closed?'closed':''}">
+  // ── Función local: tarjeta de un partido ──
+  const cardHTML = (m, pred) => {
+    const closed    = isClosed(m);
+    const isWC      = isWCUsed(myWC, m);
+    const rem       = wcRemaining(myWC, m.phase, m.group);
+    const quota     = WC_QUOTA[m.phase] || 0;
+    const canWC     = quota > 0 && (rem > 0 || isWC);
+    const metaLeft  = m.group && m.group !== '?' ? `Grupo ${m.group}` : (PHASES[m.phase]||m.phase);
+    const metaRight = fmtDate(m.kickoff || m.date);
+    return `<div class="match-card ${pred?'has-pred':''} ${closed?'closed':''}">
         <div class="match-meta">
           <span>${metaLeft}${m.city?' · '+m.city:''}</span>
           <span>${metaRight}</span>
@@ -1935,6 +1968,63 @@ function renderPredictions(con) {
         ${!closed ? renderTrends(m.id) : ''}
         ${canSeeBets(m) ? renderBetsPanel(m) : ''}
       </div>`;
+  };
+
+  // ── Partidos pendientes / en vivo ──
+  if (predSortMode === 'fecha') {
+    for (const m of upcoming) {
+      html += cardHTML(m, preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id));
+    }
+  } else if (predSortMode === 'grupo') {
+    const byKey = {}, keyOrder = [];
+    for (const m of upcoming) {
+      const key = m.group && m.group !== '?' ? m.group : (m.phase||'?');
+      if (!byKey[key]) { byKey[key]=[]; keyOrder.push(key); }
+      byKey[key].push(m);
+    }
+    keyOrder.sort((a,b) => {
+      const aG=/^[A-Z]$/.test(a), bG=/^[A-Z]$/.test(b);
+      if(aG&&bG) return a.localeCompare(b);
+      if(aG) return -1; if(bG) return 1;
+      return Object.keys(PHASES).indexOf(a) - Object.keys(PHASES).indexOf(b);
+    });
+    for (const key of keyOrder) {
+      html += `<div class="sec-title">${/^[A-Z]$/.test(key)?'Grupo '+key:(PHASES[key]||key)}</div>`;
+      for (const m of byKey[key]) {
+        html += cardHTML(m, preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id));
+      }
+    }
+  } else {
+    // Por fase (default)
+    const byPhase = {};
+    for (const m of upcoming) { (byPhase[m.phase]=byPhase[m.phase]||[]).push(m); }
+    const phOrd = Object.keys(PHASES);
+    const sortedPhases = Object.keys(byPhase).sort((a,b) => phOrd.indexOf(a)-phOrd.indexOf(b));
+    for (const phase of sortedPhases) {
+      const quota = WC_QUOTA[phase] || 0;
+      const mult  = PHASE_MULT[phase] || 1;
+      const multTag = mult > 1 ? `<span style="color:var(--text-m);font-size:11px;margin-left:6px;font-weight:500;">×${mult} pts</span>` : '';
+      let wcTag = '';
+      if (quota > 0) {
+        if (phase === 'grupos') {
+          wcTag = `<span style="color:var(--gold);font-size:11px;margin-left:6px;">🎯 1 redoblona por grupo</span>`;
+        } else {
+          const rem = wcRemaining(myWC, phase, '');
+          if (rem > 0) wcTag = `<span style="color:var(--gold);font-size:11px;margin-left:6px;">🎯 ${rem} redoblona${rem>1?'s':''} disponible${rem>1?'s':''}</span>`;
+        }
+      }
+      html += `<div class="sec-title">${PHASES[phase]||phase}${multTag}${wcTag}</div>`;
+      for (const m of byPhase[phase]) {
+        html += cardHTML(m, preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id));
+      }
+    }
+  }
+
+  // ── Partidos finalizados ──
+  if (finishedList.length) {
+    html += `<div class="sec-title" style="color:var(--text-m);margin-top:8px;">✅ Finalizados (${finishedList.length})</div>`;
+    for (const m of finishedList) {
+      html += cardHTML(m, preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id));
     }
   }
 
@@ -2000,7 +2090,10 @@ function renderBetsPanel(m) {
       '</span>' +
       (isWC  ? '<span class="bet-badge">🎯</span>' : '') +
       (risk > 0 ? '<span class="risk-badge">🎲+' + risk + '</span>' : '') +
-      '<span class="bet-score">' + pred.homeScore + '-' + pred.awayScore + '</span>' +
+      '<div style="flex-shrink:0;min-width:38px;text-align:center;">' +
+        '<div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:.03em;">' + pred.homeScore + '-' + pred.awayScore + '</div>' +
+        (m.homeScore !== null ? '<div style="font-size:10px;font-weight:600;margin-top:2px;color:' + (isLive ? '#f97316' : 'var(--text-m)') + ';">' + (isLive ? '⏱ ' : '✅ ') + m.homeScore + '-' + m.awayScore + '</div>' : '') +
+      '</div>' +
       '<span class="bet-pts ' + ptsCls + '">' + ptsLbl + '</span>' +
       '</div>';
   }
