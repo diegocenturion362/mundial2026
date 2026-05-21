@@ -763,8 +763,12 @@ let currentPlayer = null;
 let currentView   = 'predictions';
 let predSortMode    = 'fase';   // 'fecha' | 'grupo' | 'fase'
 let apuestasSortMode = 'fecha'; // 'fecha' | 'grupo' | 'fase'
-function setPredSort(mode)    { predSortMode    = mode; renderView('predictions'); }
-function setApuestasSort(mode){ apuestasSortMode = mode; renderView('misapuestas'); }
+let predSortFilter  = 'all';    // sub-filtro activo en Pronósticos
+let apuestasFilter  = 'all';    // sub-filtro activo en Mis Apuestas
+function setPredSort(mode)    { predSortMode    = mode; predSortFilter  = 'all'; renderView('predictions'); }
+function setApuestasSort(mode){ apuestasSortMode = mode; apuestasFilter  = 'all'; renderView('misapuestas'); }
+function setPredFilter(val)   { predSortFilter  = val; renderView('predictions'); }
+function setApuestasFilter(val){ apuestasFilter  = val; renderView('misapuestas'); }
 let adminAuth     = false;
 
 // ╔══════════════════════════════════════════════════╗
@@ -1436,19 +1440,52 @@ function renderMisApuestas(con) {
     '<button class="btn btn-secondary btn-sm" onclick="filterApuestas(\'wrong\')" id="fa-wrong">✗ Perdidos</button>'+
     '</div><div id="apuestas-list">';
 
-  // ── Barra de ordenamiento ──
-  html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px;">'+
-    '<span style="font-size:11px;color:var(--text-m);white-space:nowrap;flex-shrink:0;">Ordenar:</span>'+
-    '<button class="btn btn-secondary btn-sm'+(apuestasSortMode==='fecha'?' btn-primary':'')+'" onclick="setApuestasSort(\'fecha\')">📅 Fecha</button>'+
-    '<button class="btn btn-secondary btn-sm'+(apuestasSortMode==='grupo'?' btn-primary':'')+'" onclick="setApuestasSort(\'grupo\')">👥 Grupo</button>'+
-    '<button class="btn btn-secondary btn-sm'+(apuestasSortMode==='fase'?' btn-primary':'')+'" onclick="setApuestasSort(\'fase\')">🏆 Fase</button>'+
-  '</div>';
+  // ── Barra de ordenamiento + sub-filtro ──
+  {
+    const modes=[{v:'fecha',icon:'📅',lbl:'Fecha'},{v:'grupo',icon:'👥',lbl:'Grupo'},{v:'fase',icon:'🏆',lbl:'Fase'}];
+    let selHtml='';
+    if(apuestasSortMode==='fase'){
+      selHtml='<option value="all">Todas las fases</option>';
+      for(const [key,label] of Object.entries(PHASES)){
+        if(allM.some(m=>m.phase===key))
+          selHtml+='<option value="'+key+'"'+(apuestasFilter===key?' selected':'')+'>'+label+'</option>';
+      }
+    }else if(apuestasSortMode==='grupo'){
+      selHtml='<option value="all">Todos los grupos</option>';
+      const keys=[],seen=new Set();
+      for(const m of allM){const k=m.group&&m.group!=='?'?m.group:(m.phase||'?');if(!seen.has(k)){seen.add(k);keys.push(k);}}
+      keys.sort((a,b)=>{const aG=/^[A-Z]$/.test(a),bG=/^[A-Z]$/.test(b);if(aG&&bG)return a.localeCompare(b);if(aG)return -1;if(bG)return 1;return Object.keys(PHASES).indexOf(a)-Object.keys(PHASES).indexOf(b);});
+      for(const k of keys){const lbl=/^[A-Z]$/.test(k)?'Grupo '+k:(PHASES[k]||k);selHtml+='<option value="'+k+'"'+(apuestasFilter===k?' selected':'')+'>'+lbl+'</option>';}
+    }else{
+      selHtml='<option value="all">Todas las fechas</option>';
+      const seen=new Set();
+      for(const m of allM){const d=new Date(m.kickoff||m.date);const key=d.toISOString().slice(0,10);if(!seen.has(key)){seen.add(key);const lbl=new Intl.DateTimeFormat('es-PY',{weekday:'short',day:'2-digit',month:'short'}).format(d);selHtml+='<option value="'+key+'"'+(apuestasFilter===key?' selected':'')+'>'+lbl+'</option>';}}
+    }
+    html+='<div style="margin-bottom:10px;">'+
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;overflow-x:auto;padding-bottom:2px;">'+
+      '<span style="font-size:11px;color:var(--text-m);white-space:nowrap;flex-shrink:0;">Ordenar:</span>'+
+      modes.map(mode=>'<button class="btn btn-secondary btn-sm'+(apuestasSortMode===mode.v?' btn-primary':'')+'" onclick="setApuestasSort(\''+mode.v+'\')">'+mode.icon+' '+mode.lbl+'</button>').join('')+
+      '</div>'+
+      '<select style="font-size:13px;padding:7px 12px;" onchange="setApuestasFilter(this.value)">'+selHtml+'</select>'+
+      '</div>';
+  }
+
+  // ── Aplicar sub-filtro ──
+  let filteredM=allM;
+  if(apuestasFilter!=='all'){
+    filteredM=allM.filter(m=>{
+      if(apuestasSortMode==='fase') return m.phase===apuestasFilter;
+      if(apuestasSortMode==='grupo') return (m.group&&m.group!=='?'?m.group:(m.phase||'?'))===apuestasFilter;
+      if(apuestasSortMode==='fecha') return new Date(m.kickoff||m.date).toISOString().slice(0,10)===apuestasFilter;
+      return true;
+    });
+  }
 
   // ── Grupos de apuestas según ordenamiento ──
   const apuestaGroups = [];
   if (apuestasSortMode === 'grupo') {
     const byKey={}, keyOrder=[];
-    for(const m of allM){
+    for(const m of filteredM){
       const key=m.group&&m.group!=='?'?m.group:(m.phase||'?');
       if(!byKey[key]){byKey[key]=[];keyOrder.push(key);}
       byKey[key].push(m);
@@ -1457,11 +1494,11 @@ function renderMisApuestas(con) {
     for(const key of keyOrder) apuestaGroups.push({hdr:/^[A-Z]$/.test(key)?'Grupo '+key:(PHASES[key]||key),matches:byKey[key]});
   } else if (apuestasSortMode === 'fase') {
     const byPhase={};
-    for(const m of allM){(byPhase[m.phase]=byPhase[m.phase]||[]).push(m);}
+    for(const m of filteredM){(byPhase[m.phase]=byPhase[m.phase]||[]).push(m);}
     const phOrd=Object.keys(PHASES);
     Object.keys(byPhase).sort((a,b)=>phOrd.indexOf(a)-phOrd.indexOf(b)).forEach(ph=>apuestaGroups.push({hdr:PHASES[ph]||ph,matches:byPhase[ph]}));
   } else {
-    apuestaGroups.push({matches:allM});
+    apuestaGroups.push({matches:filteredM});
   }
 
   for(const grp of apuestaGroups){
@@ -1489,7 +1526,8 @@ function renderMisApuestas(con) {
       '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+
       m.homeTeam+' vs '+m.awayTeam+(isWC?' 🎯':'')+'</div>'+
       '<div style="font-size:11px;color:var(--text-m);">'+(PHASES[m.phase]||m.phase)+(m.group?' · Gr.'+m.group:'')+
-      (isLive?' <span class="live-badge"><span class="live-dot"></span>'+(m.homeScore!==null?m.homeScore+'-'+m.awayScore+' · ':'')+'En vivo</span>':'')+
+      (isLive?' <span class="live-badge"><span class="live-dot"></span>'+(m.homeScore!==null?m.homeScore+'-'+m.awayScore+' · ':'')+
+        (m.liveDetail==='Descanso'?'Descanso':m.liveMinute?m.liveMinute+"'":'En vivo')+'</span>':'')+
       (isFin&&m.homeScore!==null?' · '+m.homeScore+'-'+m.awayScore:'')+
       '</div></div>'+
       '<div style="text-align:right;flex-shrink:0;">'+
@@ -1881,17 +1919,68 @@ function renderPredictions(con) {
     </div>
   </div>`;
 
-  // ── Barra de ordenamiento ──
-  html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px;">
-    <span style="font-size:11px;color:var(--text-m);white-space:nowrap;flex-shrink:0;">Ordenar:</span>
-    <button class="btn btn-secondary btn-sm${predSortMode==='fase'?' btn-primary':''}" onclick="setPredSort('fase')">🏆 Fase</button>
-    <button class="btn btn-secondary btn-sm${predSortMode==='grupo'?' btn-primary':''}" onclick="setPredSort('grupo')">👥 Grupo</button>
-    <button class="btn btn-secondary btn-sm${predSortMode==='fecha'?' btn-primary':''}" onclick="setPredSort('fecha')">📅 Fecha</button>
-  </div>`;
-
+  // ── Listas base ──
   const allSorted    = [...matches].sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
   const upcoming     = allSorted.filter(m => m.status !== 'finished');
   const finishedList = allSorted.filter(m => m.status === 'finished').reverse();
+
+  // ── Barra de ordenamiento + sub-filtro ──
+  {
+    const modes = [{v:'fase',icon:'🏆',lbl:'Fase'},{v:'grupo',icon:'👥',lbl:'Grupo'},{v:'fecha',icon:'📅',lbl:'Fecha'}];
+    let selHtml = '';
+    if (predSortMode === 'fase') {
+      selHtml = '<option value="all">Todas las fases</option>';
+      for (const [key, label] of Object.entries(PHASES)) {
+        if (allSorted.some(m => m.phase === key))
+          selHtml += `<option value="${key}"${predSortFilter===key?' selected':''}>${label}</option>`;
+      }
+    } else if (predSortMode === 'grupo') {
+      selHtml = '<option value="all">Todos los grupos</option>';
+      const keys = [], seen = new Set();
+      for (const m of allSorted) {
+        const k = m.group && m.group !== '?' ? m.group : (m.phase||'?');
+        if (!seen.has(k)) { seen.add(k); keys.push(k); }
+      }
+      keys.sort((a,b)=>{const aG=/^[A-Z]$/.test(a),bG=/^[A-Z]$/.test(b);if(aG&&bG)return a.localeCompare(b);if(aG)return -1;if(bG)return 1;return Object.keys(PHASES).indexOf(a)-Object.keys(PHASES).indexOf(b);});
+      for (const k of keys) {
+        const lbl = /^[A-Z]$/.test(k) ? 'Grupo '+k : (PHASES[k]||k);
+        selHtml += `<option value="${k}"${predSortFilter===k?' selected':''}>${lbl}</option>`;
+      }
+    } else {
+      selHtml = '<option value="all">Todas las fechas</option>';
+      const seen = new Set();
+      for (const m of allSorted) {
+        const d = new Date(m.kickoff||m.date);
+        const key = d.toISOString().slice(0,10);
+        if (!seen.has(key)) {
+          seen.add(key);
+          const lbl = new Intl.DateTimeFormat('es-PY',{weekday:'short',day:'2-digit',month:'short'}).format(d);
+          selHtml += `<option value="${key}"${predSortFilter===key?' selected':''}>${lbl}</option>`;
+        }
+      }
+    }
+    html += `<div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;overflow-x:auto;padding-bottom:2px;">
+        <span style="font-size:11px;color:var(--text-m);white-space:nowrap;flex-shrink:0;">Ordenar:</span>
+        ${modes.map(mode=>`<button class="btn btn-secondary btn-sm${predSortMode===mode.v?' btn-primary':''}" onclick="setPredSort('${mode.v}')">${mode.icon} ${mode.lbl}</button>`).join('')}
+      </div>
+      <select style="font-size:13px;padding:7px 12px;" onchange="setPredFilter(this.value)">${selHtml}</select>
+    </div>`;
+  }
+
+  // ── Aplicar sub-filtro ──
+  let filteredUpcoming = upcoming;
+  let filteredFinished = finishedList;
+  if (predSortFilter !== 'all') {
+    const filterFn = m => {
+      if (predSortMode === 'fase') return m.phase === predSortFilter;
+      if (predSortMode === 'grupo') return (m.group&&m.group!=='?'?m.group:(m.phase||'?')) === predSortFilter;
+      if (predSortMode === 'fecha') return new Date(m.kickoff||m.date).toISOString().slice(0,10) === predSortFilter;
+      return true;
+    };
+    filteredUpcoming = upcoming.filter(filterFn);
+    filteredFinished = finishedList.filter(filterFn);
+  }
   const imprevisibleId = getImprevisibleMatchId();
 
   // ── Función local: tarjeta de un partido ──
@@ -1903,6 +1992,10 @@ function renderPredictions(con) {
     const canWC     = quota > 0 && (rem > 0 || isWC);
     const metaLeft  = m.group && m.group !== '?' ? `Grupo ${m.group}` : (PHASES[m.phase]||m.phase);
     const metaRight = fmtDate(m.kickoff || m.date);
+    const isLiveMatch = m.status === 'live';
+    const liveTimeStr = isLiveMatch
+      ? (m.liveDetail === 'Descanso' ? '⏱ Descanso' : m.liveMinute ? `⏱ ${m.liveMinute}'` : '⏱ En juego')
+      : '';
     return `<div class="match-card ${pred?'has-pred':''} ${closed?'closed':''}">
         <div class="match-meta">
           <span>${metaLeft}${m.city?' · '+m.city:''}</span>
@@ -1914,14 +2007,17 @@ function renderPredictions(con) {
             <div class="team-flag">${renderFlag(m.homeCode, m.homeTeam)}</div>
             <div class="team-name">${m.homeTeam}</div>
           </div>
-          <div class="score-area">
-            <input type="number" class="score-box" id="h-${m.id}" min="0" max="20" placeholder="–"
-              value="${pred!=null?pred.homeScore:''}" ${closed?'disabled':''}
-              ${!closed&&PLAYOFF_PHASES.has(m.phase)?`oninput="checkPenSelector('${m.id}')"`:''}>
-            <span class="score-sep">:</span>
-            <input type="number" class="score-box" id="a-${m.id}" min="0" max="20" placeholder="–"
-              value="${pred!=null?pred.awayScore:''}" ${closed?'disabled':''}
-              ${!closed&&PLAYOFF_PHASES.has(m.phase)?`oninput="checkPenSelector('${m.id}')"`:''}>
+          <div class="score-area" ${isLiveMatch?'style="flex-direction:column;align-items:center;gap:3px;"':''}>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" class="score-box" id="h-${m.id}" min="0" max="20" placeholder="–"
+                value="${pred!=null?pred.homeScore:''}" ${closed?'disabled':''}
+                ${!closed&&PLAYOFF_PHASES.has(m.phase)?`oninput="checkPenSelector('${m.id}')"`:''}>
+              <span class="score-sep">:</span>
+              <input type="number" class="score-box" id="a-${m.id}" min="0" max="20" placeholder="–"
+                value="${pred!=null?pred.awayScore:''}" ${closed?'disabled':''}
+                ${!closed&&PLAYOFF_PHASES.has(m.phase)?`oninput="checkPenSelector('${m.id}')"`:''}>
+            </div>
+            ${isLiveMatch?`<div style="font-size:11px;font-weight:700;color:#f97316;letter-spacing:.03em;">${liveTimeStr}</div>`:''}
           </div>
           <div class="team-side">
             <div class="team-flag">${renderFlag(m.awayCode, m.awayTeam)}</div>
@@ -1972,12 +2068,12 @@ function renderPredictions(con) {
 
   // ── Partidos pendientes / en vivo ──
   if (predSortMode === 'fecha') {
-    for (const m of upcoming) {
+    for (const m of filteredUpcoming) {
       html += cardHTML(m, preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id));
     }
   } else if (predSortMode === 'grupo') {
     const byKey = {}, keyOrder = [];
-    for (const m of upcoming) {
+    for (const m of filteredUpcoming) {
       const key = m.group && m.group !== '?' ? m.group : (m.phase||'?');
       if (!byKey[key]) { byKey[key]=[]; keyOrder.push(key); }
       byKey[key].push(m);
@@ -1997,7 +2093,7 @@ function renderPredictions(con) {
   } else {
     // Por fase (default)
     const byPhase = {};
-    for (const m of upcoming) { (byPhase[m.phase]=byPhase[m.phase]||[]).push(m); }
+    for (const m of filteredUpcoming) { (byPhase[m.phase]=byPhase[m.phase]||[]).push(m); }
     const phOrd = Object.keys(PHASES);
     const sortedPhases = Object.keys(byPhase).sort((a,b) => phOrd.indexOf(a)-phOrd.indexOf(b));
     for (const phase of sortedPhases) {
@@ -2021,9 +2117,9 @@ function renderPredictions(con) {
   }
 
   // ── Partidos finalizados ──
-  if (finishedList.length) {
-    html += `<div class="sec-title" style="color:var(--text-m);margin-top:8px;">✅ Finalizados (${finishedList.length})</div>`;
-    for (const m of finishedList) {
+  if (filteredFinished.length) {
+    html += `<div class="sec-title" style="color:var(--text-m);margin-top:8px;">✅ Finalizados (${filteredFinished.length})</div>`;
+    for (const m of filteredFinished) {
       html += cardHTML(m, preds.find(p => p.playerId===currentPlayer.id && p.matchId===m.id));
     }
   }
