@@ -597,12 +597,17 @@ function normalizeEspnMatch(event) {
   const away = comp.competitors?.find(c => c.homeAway === 'away');
   if (!home || !away) return null;
 
-  const statusName = comp.status?.type?.name || 'STATUS_SCHEDULED';
+  const statusType = comp.status?.type || {};
+  const statusName = statusType.name || 'STATUS_SCHEDULED';
+  const statusState = statusType.state || '';
   let status;
-  if (['STATUS_FINAL','STATUS_FULL_TIME','STATUS_FT'].includes(statusName)) {
+  if (statusType.completed || statusState === 'post' ||
+      ['STATUS_FINAL','STATUS_FULL_TIME','STATUS_FT'].includes(statusName)) {
     status = 'finished';
-  } else if (['STATUS_IN_PROGRESS','STATUS_HALFTIME','STATUS_END_PERIOD',
-              'STATUS_SUSPENDED','STATUS_PLAY'].includes(statusName)) {
+  } else if (statusState === 'in' ||
+             ['STATUS_IN_PROGRESS','STATUS_FIRST_HALF','STATUS_SECOND_HALF',
+              'STATUS_HALFTIME','STATUS_END_PERIOD','STATUS_SUSPENDED',
+              'STATUS_PLAY','STATUS_EXTRA_TIME','STATUS_PENALTY_SHOOTOUT'].includes(statusName)) {
     status = 'live';
   } else {
     status = 'pending';
@@ -1336,7 +1341,7 @@ function liveMinute(m) {
 }
 
 function canSeeBets(m) {
-  return m.status==='live' || m.status==='finished';
+  return m.status==='live' || m.status==='finished' || isClosed(m);
 }
 
 function isClosed(m) {
