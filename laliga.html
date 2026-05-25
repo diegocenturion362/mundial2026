@@ -517,6 +517,17 @@ function setupFirebaseListeners(db) {
   });
 }
 
+function firebaseMatchesToArray(val) {
+  if (Array.isArray(val)) return val.filter(Boolean);
+  if (val && typeof val === 'object') {
+    return Object.keys(val)
+      .sort((a,b)=>Number(a)-Number(b))
+      .map(k=>val[k])
+      .filter(Boolean);
+  }
+  return [];
+}
+
 // ── Caché de partidos FIFA en Firebase ──
 // Los partidos los sigue trayendo cada cliente desde la API de FIFA,
 // pero también se guardan en Firebase para compartir entre dispositivos.
@@ -527,7 +538,8 @@ function loadCachedMatchesFromFirebase(callback) {
       .then(snap => {
         if (!snap) return callback([]);
         const val = snap.val();
-        callback(val && Array.isArray(val) && val.length ? val : []);
+        const arr = firebaseMatchesToArray(val);
+        callback(arr.length ? arr : []);
       }).catch(() => callback([]));
   } else {
     callback([]);
@@ -536,7 +548,10 @@ function loadCachedMatchesFromFirebase(callback) {
 
 function saveCachedMatchesToFirebase(arr) {
   if (_fbDatabase && arr && arr.length) {
-    _fbDatabase.ref(FB_ROOT + '/fifa_matches').set(arr).catch(() => {});
+    _fbDatabase.ref(FB_ROOT + '/fifa_matches').transaction(current => {
+      const remote = firebaseMatchesToArray(current);
+      return mergeMatchesWithHistory(remote, arr);
+    }).catch(() => {});
   }
 }
 
@@ -570,6 +585,7 @@ async function initFirebase() {
 // ║  ESPN — API y caché de partidos (La Liga)         ║
 // ╚══════════════════════════════════════════════════╝
 const ESPN_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard?limit=100';
+const ESPN_SUMMARY_URL = id => `https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary?event=${encodeURIComponent(id)}`;
 const MATCH_CACHE_KEY = 'wc26_matches_laliga';
 
 // matches es la fuente de verdad global (cargada desde ESPN / caché)
@@ -587,6 +603,41 @@ function loadCachedMatches() {
 function saveCachedMatches(arr) {
   try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(arr)); } catch(e) {}
   saveCachedMatchesToFirebase(arr);
+}
+
+function sortMatchesChronologically(arr) {
+  return [...arr].sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
+}
+
+function mergeMatchesWithHistory(existing, fresh) {
+  const byId = new Map();
+
+  for (const m of existing || []) {
+    if (m && m.id) byId.set(String(m.id), m);
+  }
+
+  for (const m of fresh || []) {
+    if (!m || !m.id) continue;
+    const id = String(m.id);
+    const cached = byId.get(id);
+
+    if (!cached) {
+      byId.set(id, m);
+      continue;
+    }
+
+    // Un refresco de ESPN no debe borrar resultados ya confirmados ni correcciones manuales.
+    if (cached.manualOverride ||
+        (cached.status === 'finished' && m.status !== 'finished') ||
+        (cached.status === 'closed' && m.status === 'pending')) {
+      byId.set(id, cached);
+      continue;
+    }
+
+    byId.set(id, { ...cached, ...m });
+  }
+
+  return sortMatchesChronologically(Array.from(byId.values()));
 }
 
 // ── Normalizar un evento ESPN → formato interno ──
@@ -616,6 +667,7 @@ function normalizeEspnMatch(event) {
   const hasScore = status === 'live' || status === 'finished';
   const homeScore = hasScore ? parseInt(home.score || '0') : null;
   const awayScore = hasScore ? parseInt(away.score || '0') : null;
+  const eventDate = event.date || comp.date;
 
   const detail = comp.status?.type?.shortDetail || '';
   const isHT   = statusName === 'STATUS_HALFTIME';
@@ -623,18 +675,18 @@ function normalizeEspnMatch(event) {
   const liveMinute = isHT ? 'ET' : (minMatch ? minMatch[1] : null);
 
   // Número de jornada como "grupo" (para wildcards y agrupado)
-  const week = String(event.week?.number || event.season?.type?.week?.number || '?');
+  const week = String(event.week?.number || event.season?.type?.week?.number || eventDate?.slice(0,10) || '?');
 
   return {
-    id:        String(event.id),
+    id:        String(event.id || comp.id),
     homeTeam:  home.team.displayName || home.team.name || 'Local',
     awayTeam:  away.team.displayName || away.team.name || 'Visitante',
     homeCode:  (home.team.abbreviation || '').toUpperCase().slice(0,3),
     awayCode:  (away.team.abbreviation || '').toUpperCase().slice(0,3),
     group:     week,
     phase:     'grupos',
-    date:      event.date,
-    kickoff:   event.date,
+    date:      eventDate,
+    kickoff:   eventDate,
     status,
     homeScore,
     awayScore,
@@ -644,6 +696,56 @@ function normalizeEspnMatch(event) {
     liveMinute,
     liveDetail: isHT ? 'Descanso' : detail,
   };
+}
+
+function inferWildcardGroupForMatch(matchId) {
+  const wanted = String(matchId);
+  for (const wcData of Object.values(DB.getWildcards() || {})) {
+    const grupos = wcData?.grupos || {};
+    const found = Object.entries(grupos).find(([, id]) => String(id) === wanted);
+    if (found) return found[0];
+  }
+  return null;
+}
+
+async function recoverMissingPredictedMatchesFromEspn({ silent = true } = {}) {
+  const existingIds = new Set(matches.map(m => String(m.id)));
+  const missingIds = [...new Set(DB.getPredictions()
+    .map(p => p.matchId)
+    .filter(Boolean)
+    .map(String)
+    .filter(id => !existingIds.has(id)))];
+
+  if (!missingIds.length) return 0;
+
+  const recovered = [];
+  await Promise.all(missingIds.map(async id => {
+    try {
+      const res = await fetch(ESPN_SUMMARY_URL(id), { cache:'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const event = data.header?.competitions?.length ? data.header : data.events?.[0];
+      const match = event ? normalizeEspnMatch(event) : null;
+      if (match) {
+        const wildcardGroup = inferWildcardGroupForMatch(match.id);
+        if (wildcardGroup) match.group = wildcardGroup;
+        recovered.push(match);
+      }
+    } catch(e) {
+      console.warn('ESPN summary recovery error:', id, e);
+    }
+  }));
+
+  if (!recovered.length) return 0;
+
+  matches = mergeMatchesWithHistory(matches, recovered);
+  saveCachedMatches(matches);
+  const now = new Date().toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
+  fifaSource = `ESPN · La Liga · ${matches.length} partidos · historial ${now}`;
+  updateFifaStrip(fifaSource, false);
+  if (!silent) toast(`✓ ${recovered.length} partido${recovered.length>1?'s':''} recuperado${recovered.length>1?'s':''}`, 'ok');
+  if (currentPlayer) renderView(currentView);
+  return recovered.length;
 }
 
 // ── Carga desde ESPN (network-first, auto-refresh activo) ──
@@ -667,7 +769,8 @@ async function loadEspnMatches({ silent = false } = {}) {
 
     if (!fresh.length) throw new Error('ESPN devolvió 0 partidos');
 
-    matches = fresh;
+    matches = mergeMatchesWithHistory(matches, fresh);
+    await recoverMissingPredictedMatchesFromEspn({ silent });
     saveCachedMatches(matches);
 
     // Detectar partidos recién finalizados → snapshot del ranking
@@ -2986,17 +3089,17 @@ function clearAll() {
     return;
   }
 
-  // 3. Cargar partidos: primero caché local, luego Firebase, luego FIFA en background
+  // 3. Cargar partidos: fusionar caché local + Firebase, luego ESPN en background
   matches = loadCachedMatches();
-  if (!matches.length) {
-    // Intentar desde Firebase
-    await new Promise(resolve => {
-      loadCachedMatchesFromFirebase(fbMatches => {
-        if (fbMatches.length) { matches = fbMatches; saveCachedMatches(fbMatches); }
-        resolve();
-      });
+  await new Promise(resolve => {
+    loadCachedMatchesFromFirebase(fbMatches => {
+      if (fbMatches.length) {
+        matches = mergeMatchesWithHistory(matches, fbMatches);
+        saveCachedMatches(matches);
+      }
+      resolve();
     });
-  }
+  });
   fifaSource = matches.length ? `Caché · ${matches.length} partidos` : 'Sin datos';
 
   // 4. Restaurar HTML del player-select
