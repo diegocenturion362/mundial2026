@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>La Liga · Pronósticos [TEST]</title>
+<title>ESPN · Pronósticos [TEST]</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0e1a10">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -354,7 +354,7 @@ select { appearance:none; }
 <div id="player-select" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2rem;padding:2rem;min-height:100vh;">
   <div style="text-align:center;">
     <div style="font-size:52px;">⚽</div>
-    <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:.5rem;">LA LIGA TEST</div>
+    <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:.5rem;">ESPN TEST</div>
     <div style="font-size:13px;color:var(--text-m);margin-top:.25rem;">Conectando...</div>
   </div>
 </div>
@@ -582,10 +582,23 @@ async function initFirebase() {
 }
 
 // ╔══════════════════════════════════════════════════╗
-// ║  ESPN — API y caché de partidos (La Liga)         ║
+// ║  ESPN — API y caché de partidos                  ║
 // ╚══════════════════════════════════════════════════╝
-const ESPN_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard?limit=100';
-const ESPN_SUMMARY_URL = id => `https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary?event=${encodeURIComponent(id)}`;
+const ESPN_SOURCE_LABEL = 'La Liga + Libertadores';
+const ESPN_LEAGUES = [
+  {
+    key: 'esp.1',
+    name: 'La Liga',
+    scoreboardUrl: () => 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard?limit=100',
+    summaryUrl: id => `https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary?event=${encodeURIComponent(id)}`
+  },
+  {
+    key: 'conmebol.libertadores',
+    name: 'Copa Libertadores',
+    scoreboardUrl: () => `https://site.api.espn.com/apis/site/v2/sports/soccer/conmebol.libertadores/scoreboard?limit=100&dates=${currentWeekEspnDates()}`,
+    summaryUrl: id => `https://site.api.espn.com/apis/site/v2/sports/soccer/conmebol.libertadores/summary?event=${encodeURIComponent(id)}`
+  }
+];
 const MATCH_CACHE_KEY = 'wc26_matches_laliga';
 
 // matches es la fuente de verdad global (cargada desde ESPN / caché)
@@ -603,6 +616,24 @@ function loadCachedMatches() {
 function saveCachedMatches(arr) {
   try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(arr)); } catch(e) {}
   saveCachedMatchesToFirebase(arr);
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function espnDate(d) {
+  return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}`;
+}
+
+function currentWeekEspnDates() {
+  const start = new Date();
+  const diffToMonday = (start.getDay() + 6) % 7;
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return `${espnDate(start)}-${espnDate(end)}`;
 }
 
 function sortMatchesChronologically(arr) {
@@ -641,7 +672,7 @@ function mergeMatchesWithHistory(existing, fresh) {
 }
 
 // ── Normalizar un evento ESPN → formato interno ──
-function normalizeEspnMatch(event) {
+function normalizeEspnMatch(event, league = ESPN_LEAGUES[0]) {
   const comp = event.competitions?.[0];
   if (!comp) return null;
   const home = comp.competitors?.find(c => c.homeAway === 'home');
@@ -679,6 +710,8 @@ function normalizeEspnMatch(event) {
 
   return {
     id:        String(event.id || comp.id),
+    leagueKey: league.key,
+    leagueName: league.name,
     homeTeam:  home.team.displayName || home.team.name || 'Local',
     awayTeam:  away.team.displayName || away.team.name || 'Visitante',
     homeCode:  (home.team.abbreviation || '').toUpperCase().slice(0,3),
@@ -720,19 +753,22 @@ async function recoverMissingPredictedMatchesFromEspn({ silent = true } = {}) {
 
   const recovered = [];
   await Promise.all(missingIds.map(async id => {
-    try {
-      const res = await fetch(ESPN_SUMMARY_URL(id), { cache:'no-store' });
-      if (!res.ok) return;
-      const data = await res.json();
-      const event = data.header?.competitions?.length ? data.header : data.events?.[0];
-      const match = event ? normalizeEspnMatch(event) : null;
-      if (match) {
-        const wildcardGroup = inferWildcardGroupForMatch(match.id);
-        if (wildcardGroup) match.group = wildcardGroup;
-        recovered.push(match);
+    for (const league of ESPN_LEAGUES) {
+      try {
+        const res = await fetch(league.summaryUrl(id), { cache:'no-store' });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const event = data.header?.competitions?.length ? data.header : data.events?.[0];
+        const match = event ? normalizeEspnMatch(event, league) : null;
+        if (match) {
+          const wildcardGroup = inferWildcardGroupForMatch(match.id);
+          if (wildcardGroup) match.group = wildcardGroup;
+          recovered.push(match);
+          break;
+        }
+      } catch(e) {
+        console.warn('ESPN summary recovery error:', id, league.key, e);
       }
-    } catch(e) {
-      console.warn('ESPN summary recovery error:', id, e);
     }
   }));
 
@@ -741,7 +777,7 @@ async function recoverMissingPredictedMatchesFromEspn({ silent = true } = {}) {
   matches = mergeMatchesWithHistory(matches, recovered);
   saveCachedMatches(matches);
   const now = new Date().toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
-  fifaSource = `ESPN · La Liga · ${matches.length} partidos · historial ${now}`;
+  fifaSource = `ESPN · ${ESPN_SOURCE_LABEL} · ${matches.length} partidos · historial ${now}`;
   updateFifaStrip(fifaSource, false);
   if (!silent) toast(`✓ ${recovered.length} partido${recovered.length>1?'s':''} recuperado${recovered.length>1?'s':''}`, 'ok');
   if (currentPlayer) renderView(currentView);
@@ -753,17 +789,23 @@ async function loadEspnMatches({ silent = false } = {}) {
   if (fifaLoading) return;
   fifaLoading = true;
   updateFifaStrip('Actualizando...', true);
-  if (!silent) toast('Cargando partidos desde ESPN/La Liga…');
+  if (!silent) toast(`Cargando partidos desde ESPN/${ESPN_SOURCE_LABEL}…`);
 
   try {
-    const res  = await fetch(ESPN_URL, { cache:'no-store' });
-    if (!res.ok) throw new Error(`ESPN: ${res.status}`);
-    const data = await res.json();
-
     const prevFinished = new Set(matches.filter(m => m.status === 'finished').map(m => m.id));
 
-    const fresh = (data.events || [])
-      .map(normalizeEspnMatch)
+    const fresh = (await Promise.all(ESPN_LEAGUES.map(async league => {
+      try {
+        const res  = await fetch(league.scoreboardUrl(), { cache:'no-store' });
+        if (!res.ok) throw new Error(`ESPN ${league.name}: ${res.status}`);
+        const data = await res.json();
+        return (data.events || []).map(event => normalizeEspnMatch(event, league));
+      } catch(e) {
+        console.warn('ESPN scoreboard error:', league.key, e);
+        return [];
+      }
+    })))
+      .flat()
       .filter(Boolean)
       .sort((a,b) => new Date(a.kickoff) - new Date(b.kickoff));
 
@@ -785,8 +827,8 @@ async function loadEspnMatches({ silent = false } = {}) {
 
     const hasLive = matches.some(m => m.status === 'live');
     const now = new Date().toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
-    fifaSource = `ESPN · La Liga · ${matches.length} partidos · ${now}`;
-    if (!silent) toast(`✓ ${matches.length} partidos La Liga cargados`, 'ok');
+    fifaSource = `ESPN · ${ESPN_SOURCE_LABEL} · ${matches.length} partidos · ${now}`;
+    if (!silent) toast(`✓ ${matches.length} partidos cargados`, 'ok');
     updateFifaStrip(fifaSource, false);
     scheduleNextRefresh(hasLive);
     if (currentPlayer) renderView(currentView);
@@ -827,7 +869,7 @@ const AVATAR_COLORS = [
   {bg:'#3a2a1a',tc:'#fdba74'},{bg:'#1a2a4a',tc:'#93c5fd'},
 ];
 const PHASES = {
-  grupos:'La Liga · Jornada actual',
+  grupos:'Jornada / semana actual',
   r32:'Ronda de 32', r16:'Octavos de Final', qf:'Cuartos de Final',
   sf:'Semifinales', third:'3er Puesto', final:'Final'
 };
@@ -988,7 +1030,7 @@ function renderLoginScreen() {
   return `
     <div style="text-align:center;">
       <div style="font-size:52px;">⚽</div>
-      <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;">LA LIGA TEST</div>
+      <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;">ESPN TEST</div>
       <div style="font-size:13px;color:var(--text-m);margin-top:.25rem;">Pronósticos entre amigos</div>
     </div>
     <div class="login-box">
@@ -1991,7 +2033,7 @@ function renderPredictions(con) {
 
   // Franja FIFA
   let html = `<div class="fifa-strip" style="background:rgba(20,80,20,.15);border-color:rgba(74,222,128,.3);">
-    <span class="fifa-source" style="color:#4ade80;">⚽ LA LIGA TEST · ${fifaSource} · Auto-refresh activo</span>
+    <span class="fifa-source" style="color:#4ade80;">⚽ ESPN TEST · ${fifaSource} · Auto-refresh activo</span>
     <button class="fifa-refresh-btn" onclick="loadEspnMatches()" ${fifaLoading?'disabled':''}>↻ Actualizar</button>
   </div>`;
 
@@ -1999,13 +2041,13 @@ function renderPredictions(con) {
 
   if (!matches.length) {
     html += `<div class="empty"><div class="empty-icon">📶</div>
-      <p style="margin-bottom:1rem;">Cargando La Liga desde ESPN…</p>
+      <p style="margin-bottom:1rem;">Cargando partidos desde ESPN…</p>
       <div class="loading-row"><span class="loading-dot">●</span><span class="loading-dot"> ●</span><span class="loading-dot"> ●</span></div>
     </div>`;
     con.innerHTML = html; return;
   }
 
-  // Sin pronósticos especiales en versión La Liga
+  // Sin pronósticos especiales en esta versión de prueba
 
   // ── Listas base ──
   const allSorted    = [...matches].sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
@@ -2078,7 +2120,8 @@ function renderPredictions(con) {
     const rem       = wcRemaining(myWC, m.phase, m.group);
     const quota     = WC_QUOTA[m.phase] || 0;
     const canWC     = quota > 0 && (rem > 0 || isWC);
-    const metaLeft  = m.group && m.group !== '?' ? `Grupo ${m.group}` : (PHASES[m.phase]||m.phase);
+    const groupLabel = m.group && m.group !== '?' ? `Grupo ${m.group}` : (PHASES[m.phase]||m.phase);
+    const metaLeft  = `${m.leagueName || 'ESPN'} · ${groupLabel}`;
     const metaRight = fmtDate(m.kickoff || m.date);
     const isLiveMatch = m.status === 'live';
     const liveTimeStr = isLiveMatch
@@ -2753,9 +2796,9 @@ function renderAdmin(con) {
   const meta     = DB.get('meta', {});
 
   con.innerHTML = `
-  <!-- ESPN La Liga -->
+  <!-- ESPN -->
   <div class="admin-section">
-    <div class="sec-title">⚽ Datos ESPN · La Liga</div>
+    <div class="sec-title">⚽ Datos ESPN · La Liga + Libertadores</div>
     <p style="font-size:12px;color:var(--text-m);margin-bottom:10px;">Estado y resultados se actualizan automáticamente desde ESPN cada 60s (30s cuando hay partido en vivo). No se necesita intervención manual.</p>
     <div class="fifa-strip" style="margin-bottom:0;background:rgba(20,80,20,.15);border-color:rgba(74,222,128,.3);">
       <span class="fifa-source" style="color:#4ade80;">${fifaSource}</span>
@@ -3069,7 +3112,7 @@ function clearAll() {
   selEl.innerHTML = `
     <div style="text-align:center;padding:2rem;">
       <div style="font-size:52px;">⚽</div>
-      <div style="font-family:var(--fd,'Barlow Condensed');font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:1rem;color:#ecfdf5;">LA LIGA TEST</div>
+      <div style="font-family:var(--fd,'Barlow Condensed');font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:1rem;color:#ecfdf5;">ESPN TEST</div>
       <div style="font-size:13px;color:#7a9e82;margin-top:.5rem;">Conectando al servidor...</div>
     </div>`;
 
@@ -3108,7 +3151,7 @@ function clearAll() {
   } catch(e) {
     console.error('renderLoginScreen error:', e);
     selEl.innerHTML = '<div style="text-align:center;padding:2rem;"><div style="font-size:52px;">⚽</div>'+
-      '<div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:1rem;">LA LIGA TEST</div>'+
+      '<div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:1rem;">ESPN TEST</div>'+
       '<div style="font-size:12px;color:#f87171;margin-top:.5rem;">Error al cargar pantalla: '+String(e.message||e)+'</div>'+
       '<button onclick="location.reload()" style="margin-top:1rem;padding:10px 20px;background:#4ade80;color:#0e1a10;border:none;border-radius:8px;font-weight:700;cursor:pointer;">🔄 Recargar</button>'+
       '</div>';
@@ -3140,7 +3183,7 @@ function clearAll() {
   }
   if (!autoLogged) renderPlayerSelect();
 
-  // 6. Cargar partidos desde ESPN/La Liga (auto-refresh activo)
+  // 6. Cargar partidos desde ESPN (auto-refresh activo)
   loadEspnMatches({ silent: true });
 
   // 7. Registrar Service Worker (PWA)
