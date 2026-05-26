@@ -499,6 +499,17 @@ function normalizeFirebaseValue(val) {
   return val;
 }
 
+function firebaseMatchesToArray(val) {
+  if (Array.isArray(val)) return val.filter(Boolean);
+  if (val && typeof val === 'object') {
+    return Object.keys(val)
+      .sort((a,b)=>Number(a)-Number(b))
+      .map(k=>val[k])
+      .filter(Boolean);
+  }
+  return [];
+}
+
 function setupFirebaseListeners(db) {
   REALTIME_KEYS.forEach(key => {
     db.ref(FB_ROOT + '/' + key).on('value', snap => {
@@ -519,12 +530,13 @@ function setupFirebaseListeners(db) {
   db.ref(FB_ROOT + '/fifa_matches').on('value', snap => {
     const raw = snap.val();
     if (!raw) return;
-    const val = normalizeFirebaseValue(raw);
-    if (!Array.isArray(val) || !val.length) return;
+    const val = firebaseMatchesToArray(raw);
+    if (!val.length) return;
+    const merged = mergeMatchesWithHistory(matches, val);
     const prev = JSON.stringify(matches);
-    const next = JSON.stringify(val);
+    const next = JSON.stringify(merged);
     if (prev === next) return;          // sin cambios, no re-renderizar
-    matches = val;
+    matches = merged;
     // Guardar solo en localStorage (evitar loop de escritura Firebase→listener→Firebase)
     try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(matches)); } catch(e) {}
     if (currentPlayer && !document.activeElement?.matches('input,textarea,select')) {
@@ -543,7 +555,8 @@ function loadCachedMatchesFromFirebase(callback) {
       .then(snap => {
         if (!snap) return callback([]);
         const val = snap.val();
-        callback(val && Array.isArray(val) && val.length ? val : []);
+        const arr = firebaseMatchesToArray(val);
+        callback(arr.length ? arr : []);
       }).catch(() => callback([]));
   } else {
     callback([]);
@@ -552,7 +565,10 @@ function loadCachedMatchesFromFirebase(callback) {
 
 function saveCachedMatchesToFirebase(arr) {
   if (_fbDatabase && arr && arr.length) {
-    _fbDatabase.ref(FB_ROOT + '/fifa_matches').set(arr).catch(() => {});
+    _fbDatabase.ref(FB_ROOT + '/fifa_matches').transaction(current => {
+      const remote = firebaseMatchesToArray(current);
+      return mergeMatchesWithHistory(remote, arr);
+    }).catch(() => {});
   }
 }
 
@@ -607,6 +623,43 @@ function saveCachedMatches(arr) {
   saveCachedMatchesToFirebase(arr);
 }
 
+function sortMatchesChronologically(arr) {
+  return [...arr].sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
+}
+
+function mergeMatchesWithHistory(existing, fresh) {
+  const byId = new Map();
+
+  for (const m of existing || []) {
+    if (m && m.id) byId.set(String(m.id), m);
+  }
+
+  for (const m of fresh || []) {
+    if (!m || !m.id) continue;
+    const id = String(m.id);
+    const cached = byId.get(id);
+
+    if (!cached) {
+      byId.set(id, m);
+      continue;
+    }
+
+    // Un refresco de FIFA no debe borrar resultados confirmados ni correcciones manuales.
+    const adminReset = m.manualOverride === false;
+    if (!adminReset && (
+        cached.manualOverride ||
+        (cached.status === 'finished' && m.status !== 'finished') ||
+        (cached.status === 'closed' && m.status === 'upcoming'))) {
+      byId.set(id, cached);
+      continue;
+    }
+
+    byId.set(id, { ...cached, ...m });
+  }
+
+  return sortMatchesChronologically(Array.from(byId.values()));
+}
+
 // Helpers para parsear campos de texto de FIFA (arrays con Description)
 function localizedText(arr, fb = '') {
   return arr && arr[0] && arr[0].Description ? arr[0].Description : fb;
@@ -619,10 +672,15 @@ function countryCode(team) {
   if (!team) return '';
   return String(team.IdCountry || team.Abbreviation || '').toUpperCase().slice(0,3);
 }
-function mapFifaStatus(statusCode) {
-  if ([11,12,13].includes(statusCode)) return 'finished';
-  if ([3,4,5,6,7,8,9,10].includes(statusCode)) return 'closed';
-  if ([14,15].includes(statusCode)) return 'upcoming';
+function mapFifaStatus(match) {
+  const statusCode = Number(match.MatchStatus);
+  const hasScore = Number.isInteger(match.HomeTeamScore) && Number.isInteger(match.AwayTeamScore);
+  const matchTime = String(match.MatchTime || '').trim();
+
+  if ([11,12,13].includes(statusCode) || (statusCode === 0 && hasScore)) return 'finished';
+  if ([3,4,5,6,7,8,9,10].includes(statusCode)) return 'live';
+  if (hasScore && matchTime && matchTime !== "0'") return 'live';
+  if ([1,14,15].includes(statusCode)) return 'upcoming';
   return 'upcoming';
 }
 function mapPhase(match) {
@@ -643,6 +701,7 @@ function normalizeFifaMatch(m) {
   const group = localizedText(m.GroupName, '');
   // Extract letter after "Grupo " for display
   const groupLetter = group.match(/[A-L]$/i) ? group.match(/[A-L]$/i)[0].toUpperCase() : group || '?';
+  const status = mapFifaStatus(m);
   return {
     id:        String(m.IdMatch),
     matchNumber: m.MatchNumber || null,
@@ -654,11 +713,13 @@ function normalizeFifaMatch(m) {
     phase:     mapPhase(m),
     date:      m.Date,
     kickoff:   m.Date,
-    status:    mapFifaStatus(m.MatchStatus),
+    status,
     homeScore: Number.isInteger(m.HomeTeamScore) ? m.HomeTeamScore : null,
     awayScore: Number.isInteger(m.AwayTeamScore) ? m.AwayTeamScore : null,
     venue:     localizedText(m.Stadium && m.Stadium.Name, ''),
     city:      localizedText(m.Stadium && m.Stadium.CityName, ''),
+    liveMinute: status === 'live' ? String(m.MatchTime || '').replace("'", '') || null : null,
+    liveDetail: status === 'live' ? (m.MatchTime || 'En juego') : '',
   };
 }
 
@@ -676,23 +737,13 @@ async function loadFifaMatches({ silent = false } = {}) {
     // Snapshot de qué partidos estaban finalizados ANTES de actualizar
     const prevFinished = new Set(matches.filter(m => m.status === 'finished').map(m => m.id));
 
-    // Merge: preservar overrides manuales
-    const existing = Object.fromEntries(matches.map(m => [m.id, m]));
     const fresh = (data.Results || [])
       .map(normalizeFifaMatch)
       .sort((a,b) => new Date(a.kickoff) - new Date(b.kickoff));
 
-    for (const m of fresh) {
-      const ex = existing[m.id];
-      if (ex && ex.status === 'finished' && ex.homeScore !== null && m.status !== 'finished') {
-        m.status = ex.status; m.homeScore = ex.homeScore; m.awayScore = ex.awayScore;
-      }
-      if (ex && ex.status === 'closed' && m.status === 'upcoming') {
-        m.status = 'closed';
-      }
-    }
+    if (!fresh.length) throw new Error('FIFA devolvió 0 partidos');
 
-    matches = fresh;
+    matches = mergeMatchesWithHistory(matches, fresh);
     saveCachedMatches(matches);
 
     // Detectar partidos nuevamente finalizados → guardar snapshot automático
@@ -1367,7 +1418,7 @@ function liveMinute(m) {
 }
 
 function canSeeBets(m) {
-  return m.status==='live' || m.status==='finished';
+  return m.status==='live' || m.status==='finished' || isClosed(m);
 }
 
 function isClosed(m) {
@@ -2882,7 +2933,7 @@ function adminResetMatch(matchId) {
   m.status='upcoming';
   m.homeScore=null;
   m.awayScore=null;
-  delete m.manualOverride;
+  m.manualOverride=false;
   saveCachedMatches(matches);
   toast('Partido revertido — esperando datos de FIFA','ok');
   renderView('admin');
@@ -3035,17 +3086,17 @@ function clearAll() {
     return;
   }
 
-  // 3. Cargar partidos: primero caché local, luego Firebase, luego FIFA en background
+  // 3. Cargar partidos: fusionar caché local + Firebase, luego FIFA en background
   matches = loadCachedMatches();
-  if (!matches.length) {
-    // Intentar desde Firebase
-    await new Promise(resolve => {
-      loadCachedMatchesFromFirebase(fbMatches => {
-        if (fbMatches.length) { matches = fbMatches; saveCachedMatches(fbMatches); }
-        resolve();
-      });
+  await new Promise(resolve => {
+    loadCachedMatchesFromFirebase(fbMatches => {
+      if (fbMatches.length) {
+        matches = mergeMatchesWithHistory(matches, fbMatches);
+        saveCachedMatches(matches);
+      }
+      resolve();
     });
-  }
+  });
   fifaSource = matches.length ? `Caché · ${matches.length} partidos` : 'Sin datos';
 
   // 4. Restaurar HTML del player-select
