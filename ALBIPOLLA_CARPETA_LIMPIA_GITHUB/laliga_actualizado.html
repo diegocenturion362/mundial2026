@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>FIFA · Pronósticos [TEST]</title>
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json?v=4">
 <meta name="theme-color" content="#0e1a10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="FIFA Test">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="albipolla-icon-192-v4.png">
+<link rel="apple-touch-icon" href="albipolla-icon-512-v4.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3252,7 +3252,7 @@ function clearAll() {
 
   // 7. Registrar Service Worker (PWA)
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/mundial2026/sw.js', { scope: '/mundial2026/' })
+    navigator.serviceWorker.register('/mundial2026/sw.js?v=4', { scope: '/mundial2026/' })
       .then(reg => console.log('SW registrado:', reg.scope))
       .catch(err => console.warn('SW error:', err));
   }

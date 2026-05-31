@@ -20,11 +20,14 @@ Subir estos archivos:
 - sw.js
   Service worker actualizado con cache albipolla-v3.
 
-- icon-192.png
-  Icono chico de ALBIPOLLA.
+- albipolla-icon-192-v4.png
+  Icono chico de ALBIPOLLA con nombre nuevo para evitar cache viejo.
 
-- icon-512.png
-  Icono principal de ALBIPOLLA para celular.
+- albipolla-icon-512-v4.png
+  Icono principal de ALBIPOLLA para celular con nombre nuevo para evitar cache viejo.
+
+- icon-192.png e icon-512.png
+  Se dejan tambien por compatibilidad, pero la app ya usa los archivos albipolla-icon-...-v4.png.
 
 No hace falta subir backups, node_modules, package.json, icon.svg viejo, PDFs ni carpetas extra.
 
