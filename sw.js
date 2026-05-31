@@ -1,15 +1,14 @@
-// ── MUN'26 Service Worker ──
-const CACHE_NAME = 'mun26-v2';
+﻿// ALBIPOLLA Service Worker
+const CACHE_NAME = 'albipolla-v5';
 
-// Archivos que se cachean al instalar
 const PRECACHE = [
   '/mundial2026/',
   '/mundial2026/index.html',
-  '/mundial2026/icon.svg',
+  '/mundial2026/albipolla-icon-192-v5.png',
+  '/mundial2026/albipolla-icon-512-v5.png',
   '/mundial2026/manifest.json',
 ];
 
-// ── Instalación: cachear shell de la app ──
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -18,7 +17,6 @@ self.addEventListener('install', event => {
   );
 });
 
-// ── Activación: limpiar caches viejos ──
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -29,11 +27,9 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ── Fetch: network-first para HTML, cache-first para assets estáticos ──
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // No interceptar peticiones a Firebase, FIFA API ni Google Fonts
   if (
     url.hostname.includes('firebaseio.com') ||
     url.hostname.includes('firebase.com') ||
@@ -49,7 +45,6 @@ self.addEventListener('fetch', event => {
     url.pathname.endsWith('/');
 
   if (isHTML) {
-    // Network-first para el HTML: siempre intenta la red, usa caché solo si falla
     event.respondWith(
       fetch(event.request).then(res => {
         if (res && res.status === 200) {
@@ -59,7 +54,6 @@ self.addEventListener('fetch', event => {
       }).catch(() => caches.match(event.request).then(c => c || caches.match('/mundial2026/')))
     );
   } else {
-    // Cache-first para assets estáticos (iconos, manifest)
     event.respondWith(
       caches.match(event.request).then(cached => {
         if (cached) return cached;
