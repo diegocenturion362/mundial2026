@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FIFA · Pronósticos [TEST]</title>
-<link rel="manifest" href="manifest.json?v=4">
+<title>ALBIPOLLA · Pronósticos [TEST]</title>
+<link rel="manifest" href="manifest.json?v=5">
 <meta name="theme-color" content="#0e1a10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="FIFA Test">
-<link rel="icon" type="image/png" sizes="192x192" href="albipolla-icon-192-v4.png">
-<link rel="apple-touch-icon" href="albipolla-icon-512-v4.png">
+<meta name="apple-mobile-web-app-title" content="ALBIPOLLA">
+<link rel="icon" type="image/png" sizes="192x192" href="albipolla-icon-192-v5.png">
+<link rel="apple-touch-icon" href="albipolla-icon-512-v5.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,6 +33,9 @@ html, body { height:100%; background:var(--bg); color:var(--text); font-family:v
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 .logo-title { font-family:var(--fd); font-size:40px; font-weight:700; letter-spacing:.06em; }
 .logo-sub { font-size:13px; color:var(--text-m); margin-top:4px; }
+.brand-logo{display:block;width:112px;height:112px;object-fit:cover;margin:0 auto .8rem;background:#fff;border-radius:24px;padding:0;box-shadow:0 10px 28px rgba(0,0,0,.25)}
+.brand-title{font-family:var(--fd);font-size:30px;font-weight:800;letter-spacing:.06em}
+.brand-logo.loading{width:104px;height:104px}
 .select-card { width:100%; max-width:400px; background:var(--bg-card); border:.5px solid var(--border-md); border-radius:var(--radius); padding:1.5rem; }
 .select-card h2 { font-family:var(--fd); font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-m); margin-bottom:1rem; }
 .player-list { display:flex; flex-direction:column; gap:8px; margin-bottom:1.25rem; }
@@ -360,8 +363,8 @@ select { appearance:none; }
 <!-- ═══════════ PLAYER SELECT ═══════════ -->
 <div id="player-select" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2rem;padding:2rem;min-height:100vh;">
   <div style="text-align:center;">
-    <div style="font-size:52px;">⚽</div>
-    <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:.5rem;">FIFA TEST</div>
+    <img class="brand-logo loading" src="albipolla-icon-512-v5.png" alt="ALBIPOLLA">
+    <div class="brand-title">ALBIPOLLA</div>
     <div style="font-size:13px;color:var(--text-m);margin-top:.25rem;">Conectando...</div>
   </div>
 </div>
@@ -370,7 +373,7 @@ select { appearance:none; }
 <div id="app">
   <div style="background:#7c2d12;color:#fed7aa;text-align:center;font-size:11px;font-weight:700;letter-spacing:.1em;padding:5px;text-transform:uppercase;">⚠️ VERSIÓN DE PRUEBA — los datos no afectan la quiniela real</div>
   <div class="app-header">
-    <span class="header-logo">FIFA</span>
+    <span class="header-logo">ALBIPOLLA</span>
     <span class="phase-pill" id="header-phase">PRUEBA</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
       <button onclick="openRules()" title="Reglamento" style="background:var(--accent-dim);border:.5px solid var(--border-md);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex-shrink:0;padding:0;">📋</button>
@@ -1009,8 +1012,8 @@ function renderLoginScreen() {
 
   return `
     <div style="text-align:center;">
-      <div style="font-size:52px;">⚽</div>
-      <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;">FIFA TEST</div>
+      <img class="brand-logo" src="albipolla-icon-512-v5.png" alt="ALBIPOLLA">
+      <div class="brand-title">ALBIPOLLA</div>
       <div style="font-size:13px;color:var(--text-m);margin-top:.25rem;">Pronósticos entre amigos</div>
     </div>
     <div class="login-box">
@@ -2085,7 +2088,7 @@ function renderPredictions(con) {
 
   // Franja FIFA
   let html = `<div class="fifa-strip" style="background:rgba(20,80,20,.15);border-color:rgba(74,222,128,.3);">
-    <span class="fifa-source" style="color:#4ade80;">⚽ FIFA TEST · ${fifaSource} · Auto-refresh activo</span>
+    <span class="fifa-source" style="color:#4ade80;">⚽ ALBIPOLLA TEST · ${fifaSource} · Auto-refresh activo</span>
     <button class="fifa-refresh-btn" onclick="loadFifaMatches()" ${fifaLoading?'disabled':''}>↻ Actualizar</button>
   </div>`;
 
@@ -3175,8 +3178,8 @@ function clearAll() {
   selEl.style.display = 'flex';
   selEl.innerHTML = `
     <div style="text-align:center;padding:2rem;">
-      <div style="font-size:52px;">⚽</div>
-      <div style="font-family:var(--fd,'Barlow Condensed');font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:1rem;color:#ecfdf5;">FIFA TEST</div>
+      <img class="brand-logo loading" src="albipolla-icon-512-v5.png" alt="ALBIPOLLA">
+      <div class="brand-title" style="color:#ecfdf5;">ALBIPOLLA</div>
       <div style="font-size:13px;color:#7a9e82;margin-top:.5rem;">Conectando al servidor...</div>
     </div>`;
 
@@ -3214,8 +3217,8 @@ function clearAll() {
     selEl.innerHTML = renderLoginScreen();
   } catch(e) {
     console.error('renderLoginScreen error:', e);
-    selEl.innerHTML = '<div style="text-align:center;padding:2rem;"><div style="font-size:52px;">⚽</div>'+
-      '<div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:.06em;margin-top:1rem;">FIFA TEST</div>'+
+    selEl.innerHTML = '<div style="text-align:center;padding:2rem;"><img class="brand-logo loading" src="albipolla-icon-512-v5.png" alt="ALBIPOLLA">'+
+      '<div class="brand-title">ALBIPOLLA</div>'+
       '<div style="font-size:12px;color:#f87171;margin-top:.5rem;">Error al cargar pantalla: '+String(e.message||e)+'</div>'+
       '<button onclick="location.reload()" style="margin-top:1rem;padding:10px 20px;background:#4ade80;color:#0e1a10;border:none;border-radius:8px;font-weight:700;cursor:pointer;">🔄 Recargar</button>'+
       '</div>';
@@ -3252,7 +3255,7 @@ function clearAll() {
 
   // 7. Registrar Service Worker (PWA)
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/mundial2026/sw.js?v=4', { scope: '/mundial2026/' })
+    navigator.serviceWorker.register('/mundial2026/sw.js?v=5', { scope: '/mundial2026/' })
       .then(reg => console.log('SW registrado:', reg.scope))
       .catch(err => console.warn('SW error:', err));
   }

@@ -1,11 +1,11 @@
-// ALBIPOLLA Service Worker
-const CACHE_NAME = 'albipolla-v4';
+﻿// ALBIPOLLA Service Worker
+const CACHE_NAME = 'albipolla-v5';
 
 const PRECACHE = [
   '/mundial2026/',
   '/mundial2026/index.html',
-  '/mundial2026/albipolla-icon-192-v4.png',
-  '/mundial2026/albipolla-icon-512-v4.png',
+  '/mundial2026/albipolla-icon-192-v5.png',
+  '/mundial2026/albipolla-icon-512-v5.png',
   '/mundial2026/manifest.json',
 ];
 
