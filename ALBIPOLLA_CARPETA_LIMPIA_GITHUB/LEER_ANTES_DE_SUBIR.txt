@@ -1,0 +1,31 @@
+CARPETA LIMPIA PARA SUBIR A GITHUB
+
+Subir estos archivos:
+
+- index.html
+  App oficial ALBIPOLLA. Usa Firebase de produccion: wc26prod.
+
+- prueba.html
+  App de prueba del Mundial. Usa Firebase de prueba: wc26prueba.
+
+- laliga.html
+  App de prueba FIFA Match Centre que usamos para probar partidos actuales. Usa Firebase de prueba: wc26laliga.
+
+- laliga_actualizado.html
+  Copia de laliga.html, incluida por seguridad porque venia siendo usada en las pruebas.
+
+- manifest.json
+  Configuracion del acceso directo/PWA.
+
+- sw.js
+  Service worker actualizado con cache albipolla-v3.
+
+- icon-192.png
+  Icono chico de ALBIPOLLA.
+
+- icon-512.png
+  Icono principal de ALBIPOLLA para celular.
+
+No hace falta subir backups, node_modules, package.json, icon.svg viejo, PDFs ni carpetas extra.
+
+Si el celular sigue mostrando el icono viejo, borrar el acceso directo anterior y volver a agregar la app desde el navegador.
