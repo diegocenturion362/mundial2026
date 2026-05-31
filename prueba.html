@@ -223,7 +223,13 @@ select { appearance:none; }
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--live);animation:lpulse 1s ease-in-out infinite;flex-shrink:0}
 @keyframes lpulse{0%,100%{opacity:1}50%{opacity:.3}}
 .bet-pts{font-family:var(--fd);font-size:13px;font-weight:700;flex-shrink:0;min-width:58px;text-align:right}
+.bet-pts.pts-toggle{appearance:none;border:0;background:transparent;padding:0;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
 .bet-pts.exact{color:var(--accent)}.bet-pts.partial{color:var(--gold)}.bet-pts.wrong{color:var(--danger)}.bet-pts.pending{color:var(--text-m)}
+.points-breakdown{display:none;flex:0 0 calc(100% - 35px);margin:2px 0 0 35px;padding:8px 10px;background:rgba(15,23,18,.72);border:.5px solid var(--border-md);border-radius:var(--radius-s);font-size:11px;color:var(--text-m)}
+.points-breakdown.open{display:block}
+.points-breakdown-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+.points-breakdown-row span:last-child{font-family:var(--fd);font-weight:700;color:var(--text);text-align:right}
+.points-breakdown-total{margin-top:4px;padding-top:5px;border-top:.5px solid var(--border);color:var(--accent)}
 .risk-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(168,85,247,.15);color:#c084fc;border:.5px solid rgba(168,85,247,.3);border-radius:20px;font-size:10px;font-weight:600;padding:2px 8px}
 .bets-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:11px;padding:8px 12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border-md);cursor:pointer;font-size:12px;font-weight:500;color:var(--text-m);transition:all .15s;user-select:none}
 .bets-toggle:hover{border-color:var(--accent);color:var(--text)}
@@ -232,7 +238,7 @@ select { appearance:none; }
 .bets-toggle.open .toggle-icon{transform:rotate(180deg)}
 .bets-panel{display:none;margin-top:6px;border-radius:var(--radius-s);overflow:hidden;border:.5px solid var(--border)}
 .bets-panel.open{display:block}
-.bet-row{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:.5px solid var(--border)}
+.bet-row{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:.5px solid var(--border);flex-wrap:wrap}
 .bet-row:last-child{border-bottom:none}
 .bet-row.is-me{background:var(--accent-dim)}
 .bet-score{font-family:var(--fd);font-size:16px;font-weight:700;flex-shrink:0;min-width:38px;text-align:center;letter-spacing:.03em}
@@ -454,6 +460,7 @@ const FB_ROOT = 'wc26prueba'; // entorno de prueba — datos aislados de producc
 const _cache = {};
 const _writeTimers = {};
 let _fbDatabase = null;
+let _playersReady = false;
 
 const DB = {
   get(k, fb = null) {
@@ -491,6 +498,26 @@ const DB = {
   saveChat:   (matchId, v) => DB.set('chat_' + matchId, v),
 };
 
+function savePlayersMerged(nextPlayers) {
+  const arr = Array.isArray(nextPlayers) ? nextPlayers.filter(Boolean) : [];
+  _cache.players = arr;
+
+  if (!_fbDatabase) {
+    DB.set('players', arr);
+    return;
+  }
+
+  _fbDatabase.ref(FB_ROOT + '/players').transaction(current => {
+    const remote = normalizeFirebaseValue(current);
+    const merged = new Map();
+    if (Array.isArray(remote)) {
+      remote.filter(Boolean).forEach(p => { if (p.id) merged.set(String(p.id), p); });
+    }
+    arr.forEach(p => { if (p && p.id) merged.set(String(p.id), p); });
+    return Array.from(merged.values());
+  }).catch(err => console.warn('FB players merge error:', err));
+}
+
 // ── Listeners de tiempo real ──
 const REALTIME_KEYS = ['players', 'predictions', 'wildcards', 'special', 'meta', 'rank_snaps'];
 
@@ -508,8 +535,12 @@ function setupFirebaseListeners(db) {
   REALTIME_KEYS.forEach(key => {
     db.ref(FB_ROOT + '/' + key).on('value', snap => {
       const raw = snap.val();
-      if (raw === null) return;
+      if (raw === null) {
+        if (key === 'players') { _cache.players = []; _playersReady = true; }
+        return;
+      }
       const val = normalizeFirebaseValue(raw);
+      if (key === 'players') _playersReady = true;
       const prev = JSON.stringify(_cache[key]);
       const next = JSON.stringify(val);
       if (prev === next) return;
@@ -583,6 +614,8 @@ async function initFirebase() {
 
   const data = snap.val() || {};
   Object.entries(data).forEach(([k, v]) => { _cache[k] = v; });
+  if (!Object.prototype.hasOwnProperty.call(data, 'players')) _cache.players = [];
+  _playersReady = true;
 
   setupFirebaseListeners(db);
 }
@@ -961,6 +994,11 @@ function getPin() {
 }
 
 function loginWithPin() {
+  if (!_playersReady) {
+    toast('Cargando jugadores desde Firebase. Esperá unos segundos y reintentá.', 'err');
+    return;
+  }
+
   const name = document.getElementById('ln-name')?.value?.trim();
   const pin  = getPin();
   if (!name || name.length < 2) { toast('Ingresá tu nombre','err'); return; }
@@ -975,7 +1013,7 @@ function loginWithPin() {
     if (!existing.pinHash) {
       // Primera vez que usa PIN — lo asignamos
       existing.pinHash = pinHash;
-      DB.savePlayers(players);
+      savePlayersMerged(players);
       const rem0 = document.getElementById('ln-remember')?.checked;
       doLogin(existing, rem0);
     } else if (existing.pinHash === pinHash) {
@@ -988,7 +1026,7 @@ function loginWithPin() {
     // Jugador nuevo
     const np = { id:genId(), name, colorIdx:players.length, pinHash, joinedAt:Date.now() };
     players.push(np);
-    DB.savePlayers(players);
+    savePlayersMerged(players);
     toast('¡Bienvenido/a ' + name + '! 🎉','ok');
     const rem2 = document.getElementById('ln-remember')?.checked;
     doLogin(np, rem2);
@@ -1341,7 +1379,7 @@ function ptsEarnedInMatch(playerId, matchId) {
   const wcData = DB.getWildcards()[playerId]||{};
   const isWC = isWCUsed(wcData, m);
   const pts = calcPts(p, m.homeScore, m.awayScore, isWC, m.phase, m.penWinner);
-  const risk = pts>0 ? calcRiskBonus(p, m.homeScore, m.awayScore, m.id, DB.getPredictions()) : 0;
+  const risk = pts>0 ? calcRiskBonus(p, m.homeScore, m.awayScore, m.id, activePredictions()) : 0;
   let total = pts + risk;
   if (total > 0) {
     const allActive = activePredictions();
@@ -1350,6 +1388,73 @@ function ptsEarnedInMatch(playerId, matchId) {
     if (soloScorer) total *= 2;
   }
   return total;
+}
+
+function pointsBreakdownForMatch(playerId, m, pred) {
+  if (!pred) return null;
+  if (!m || m.homeScore===null || m.awayScore===null) {
+    return {total:null, rows:[{label:'Estado', value:'Esperando resultado'}]};
+  }
+
+  const wcData = DB.getWildcards()[playerId] || {};
+  const isWC = isWCUsed(wcData, m);
+  const rawBase = calcPtsBase(pred, m.homeScore, m.awayScore);
+  const rows = [];
+
+  if (rawBase === 5) rows.push({label:'Acierto', value:'+5 exacto'});
+  else if (rawBase === 4) rows.push({label:'Acierto', value:'+4 ganador y diferencia'});
+  else if (rawBase === 3) rows.push({label:'Acierto', value:'+3 ganador'});
+  else rows.push({label:'Acierto', value:'+0'});
+
+  const mult = PHASE_MULT[m.phase] || 1;
+  let subtotal = rawBase * mult;
+  const phaseName = PHASES[m.phase] || m.phase || 'fase';
+  if (rawBase > 0) {
+    rows.push({label:'Fase', value:rawBase + ' × ' + mult + ' (' + phaseName + ') = +' + subtotal});
+  }
+
+  const penBonus = (m.penWinner && pred.penWinner && pred.penWinner === m.penWinner) ? (PEN_BONUS_PTS[m.phase] || 0) : 0;
+  if (penBonus > 0) {
+    subtotal += penBonus;
+    rows.push({label:'Penales', value:'+' + penBonus});
+  }
+
+  if (isWC && subtotal > 0) {
+    const before = subtotal;
+    subtotal *= 2;
+    rows.push({label:'Redoblona', value:before + ' × 2 = +' + subtotal});
+  }
+
+  const risk = (m.status === 'finished' && rawBase > 0)
+    ? calcRiskBonus(pred, m.homeScore, m.awayScore, m.id, activePredictions())
+    : 0;
+  let total = subtotal + risk;
+  if (risk > 0) rows.push({label:'Bonus riesgo', value:'+' + risk});
+
+  if (rawBase > 0 && total > 0) {
+    const onMatch = activePredictions().filter(x=>x.matchId===m.id);
+    const soloScorer = onMatch.filter(x=>calcPtsBase(x,m.homeScore,m.awayScore)>0).length===1;
+    if (soloScorer) {
+      const before = total;
+      total *= 2;
+      rows.push({label:'Único que sumó', value:before + ' × 2 = +' + total});
+    }
+  }
+
+  if (m.status === 'live') rows.push({label:'Estado', value:'Provisorio'});
+  rows.push({label:'Total', value:total > 0 ? '+' + total + ' pts' : '0 pts', total:true});
+  return {total, rows};
+}
+
+function renderPointsBreakdown(id, breakdown) {
+  if (!breakdown) return '';
+  const rows = breakdown.rows.map(r =>
+    '<div class="points-breakdown-row' + (r.total ? ' points-breakdown-total' : '') + '">' +
+      '<span>' + escapeHtml(String(r.label)) + '</span>' +
+      '<span>' + escapeHtml(String(r.value)) + '</span>' +
+    '</div>'
+  ).join('');
+  return '<div class="points-breakdown" id="' + id + '">' + rows + '</div>';
 }
 
 function betResult(pred, hScore, aScore) {
@@ -1371,7 +1476,7 @@ function liveMinute(m) {
 }
 
 function canSeeBets(m) {
-  return m.status==='live' || m.status==='finished';
+  return m.status==='live' || m.status==='finished' || isClosed(m);
 }
 
 function isClosed(m) {
@@ -2213,10 +2318,12 @@ function renderBetsPanel(m) {
       ? ptsEarnedInMatch(pl.id, m.id)
       : provPtsForMatch(pl.id, m.id);
     const risk   = m.status === 'finished'
-      ? calcRiskBonus(pred, m.homeScore, m.awayScore, m.id, allPreds)
+      ? calcRiskBonus(pred, m.homeScore, m.awayScore, m.id, activePredictions())
       : 0;
     const res    = m.homeScore !== null ? betResult(pred, m.homeScore, m.awayScore) : '';
     const ptsCls = res==='exact' ? 'exact' : res==='partial' ? 'partial' : res==='wrong' ? 'wrong' : 'pending';
+    const breakdown = (pts !== null && res !== '') ? pointsBreakdownForMatch(pl.id, m, pred) : null;
+    const bdId = 'pb-' + String(m.id).replace(/[^a-zA-Z0-9_-]/g,'') + '-' + String(pl.id).replace(/[^a-zA-Z0-9_-]/g,'');
 
     let ptsLbl;
     if (pts === null || res === '') {
@@ -2231,6 +2338,10 @@ function renderBetsPanel(m) {
       ptsLbl = pts > 0 ? '+' + pts : '–';
     }
 
+    const ptsHTML = breakdown
+      ? '<button type="button" class="bet-pts pts-toggle ' + ptsCls + '" onclick="event.stopPropagation();togglePointsBreakdown(\'' + bdId + '\')" title="Ver desglose de puntos">' + ptsLbl + '</button>'
+      : '<span class="bet-pts ' + ptsCls + '">' + ptsLbl + '</span>';
+
     rowsHTML += '<div class="bet-row' + (isMe ? ' is-me' : '') + '">' +
       '<div class="ava" style="width:26px;height:26px;background:'+c.bg+';color:'+c.tc+';font-size:10px;flex-shrink:0;">'+initials(pl.name)+'</div>' +
       '<span style="font-size:13px;flex:1;' + (isMe ? 'font-weight:600;' : '') + '">' +
@@ -2242,7 +2353,8 @@ function renderBetsPanel(m) {
         '<div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:.03em;">' + pred.homeScore + '-' + pred.awayScore + '</div>' +
         (m.homeScore !== null ? '<div style="font-size:10px;font-weight:600;margin-top:2px;color:' + (isLive ? '#f97316' : 'var(--text-m)') + ';">' + (isLive ? '⏱ ' : '✅ ') + m.homeScore + '-' + m.awayScore + '</div>' : '') +
       '</div>' +
-      '<span class="bet-pts ' + ptsCls + '">' + ptsLbl + '</span>' +
+      ptsHTML +
+      renderPointsBreakdown(bdId, breakdown) +
       '</div>';
   }
 
@@ -2263,6 +2375,11 @@ function toggleBets(matchId) {
   const isOpen = panel.classList.contains('open');
   panel.classList.toggle('open', !isOpen);
   toggle.classList.toggle('open', !isOpen);
+}
+
+function togglePointsBreakdown(id) {
+  const box = document.getElementById(id);
+  if (box) box.classList.toggle('open');
 }
 
 function activePredictions() {
