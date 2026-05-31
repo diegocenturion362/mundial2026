@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>ALBIPOLLA · Pronósticos [PRUEBA]</title>
-<link rel="manifest" href="manifest.json?v=5">
+<link rel="manifest" href="manifest.json?v=6">
 <meta name="theme-color" content="#0e1a10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -38,7 +38,8 @@ html, body { height:100%; background:var(--bg); color:var(--text); font-family:v
 .brand-logo.loading{width:104px;height:104px}
 .sponsor-box{width:100%;max-width:360px;margin:2px auto 0;padding:14px 18px;background:linear-gradient(135deg,#ffffff 0%,#f0f7fc 100%);border-radius:14px;position:relative;overflow:hidden;box-shadow:0 0 0 1px rgba(14,80,146,.08),0 8px 24px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.8);display:flex;justify-content:center;align-items:center}
 .sponsor-box::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at top right,rgba(111,182,224,.18),transparent 60%),radial-gradient(ellipse at bottom left,rgba(14,80,146,.08),transparent 60%);pointer-events:none}
-.ranking-sponsor{margin:0 0 12px}
+.ranking-sponsor{margin:0 auto 14px}
+.login-sponsor{margin:0 auto 20px}
 .tecsul-logo{display:inline-flex;align-items:flex-end;font-family:'Nunito',sans-serif;font-weight:900;line-height:.9;letter-spacing:-.025em;position:relative;user-select:none;font-size:40px}
 .tecsul-logo .tec{color:#6FB6E0}
 .tecsul-logo .sul{color:#0E5092;position:relative}
@@ -954,6 +955,7 @@ function renderLoginScreen() {
   }
 
   return `
+    ${renderSponsorBox('login-sponsor')}
     <div style="text-align:center;">
       <img class="brand-logo" src="albipolla-icon-512-v5.png" alt="ALBIPOLLA">
       <div class="brand-title">ALBIPOLLA</div>
@@ -979,8 +981,7 @@ function renderLoginScreen() {
         Recordarme en este dispositivo
       </label>
       ${chips}
-    </div>
-    ${renderSponsorBox()}`;
+    </div>`;
 }
 
 function renderSponsorBox(extraClass = '') {
@@ -3329,7 +3330,7 @@ function clearAll() {
 
   // 7. Registrar Service Worker (PWA)
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/mundial2026/sw.js?v=5', { scope: '/mundial2026/' })
+    navigator.serviceWorker.register('/mundial2026/sw.js?v=6', { scope: '/mundial2026/' })
       .then(reg => console.log('SW registrado:', reg.scope))
       .catch(err => console.warn('SW error:', err));
   }
