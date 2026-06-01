@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>ALBIPOLLA · Pronósticos</title>
-<link rel="manifest" href="manifest.json?v=5">
+<link rel="manifest" href="manifest.json?v=6">
 <meta name="theme-color" content="#0e1a10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -372,7 +372,7 @@ select { appearance:none; }
 <!-- ═══════════ MAIN APP ═══════════ -->
 <div id="app">
   <div class="app-header">
-    <span class="header-logo">ALBIPOLLA</span>
+    <span class="header-logo" onclick="tryEnableAdmin()" style="cursor:pointer;user-select:none;" title="ALBIPOLLA">ALBIPOLLA</span>
     <span class="phase-pill" id="header-phase">Pronósticos</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
       <button onclick="openRules()" title="Reglamento" style="background:var(--accent-dim);border:.5px solid var(--border-md);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex-shrink:0;padding:0;">📋</button>
@@ -407,7 +407,7 @@ select { appearance:none; }
       <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
       <span>Mis Apuestas</span>
     </button>
-    <button class="nav-item" onclick="navigate('admin')" id="nav-admin">
+    <button class="nav-item" onclick="navigate('admin')" id="nav-admin" style="display:none;">
       <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>Admin</span>
     </button>
@@ -461,6 +461,16 @@ const _writeTimers = {};
 let _fbDatabase = null;
 let _playersReady = false;
 
+// Throttle de toasts de error Firebase: máx 1 cada 10s para no spamear
+let _fbErrorLastToast = 0;
+function fbErrorToast(context, err) {
+  console.warn('FB error:', context, err);
+  const now = Date.now();
+  if (now - _fbErrorLastToast < 10000) return;
+  _fbErrorLastToast = now;
+  if (typeof toast === 'function') toast('⚠ Sin sincronización con servidor. Tus cambios pueden no guardarse.', 'err');
+}
+
 const DB = {
   get(k, fb = null) {
     if (!_cache.hasOwnProperty(k)) return fb;
@@ -479,7 +489,7 @@ const DB = {
     clearTimeout(_writeTimers[k]);
     _writeTimers[k] = setTimeout(() => {
       if (_fbDatabase) {
-        _fbDatabase.ref(FB_ROOT + '/' + k).set(v).catch(err => console.warn('FB write error:', k, err));
+        _fbDatabase.ref(FB_ROOT + '/' + k).set(v).catch(err => fbErrorToast('write ' + k, err));
       }
     }, 300);
   },
@@ -514,7 +524,7 @@ function savePlayersMerged(nextPlayers) {
     }
     arr.forEach(p => { if (p && p.id) merged.set(String(p.id), p); });
     return Array.from(merged.values());
-  }).catch(err => console.warn('FB players merge error:', err));
+  }).catch(err => fbErrorToast('players merge', err));
 }
 
 function predictionKey(pred) {
@@ -929,14 +939,6 @@ function fmtDate(d) {
   } catch { return d || ''; }
 }
 
-// Bloqueado si: ya pasó el horario de inicio, o está cerrado/finalizado
-function isClosed(m) {
-  if (m.status === 'finished' || m.status === 'closed') return true;
-  const kickoff = m.kickoff || m.date;
-  if (!kickoff) return false;
-  return Date.now() >= new Date(kickoff).getTime();
-}
-
 function toast(msg, type='') {
   const el = document.getElementById('toast');
   el.textContent = msg; el.className = 'toast show ' + type;
@@ -969,54 +971,6 @@ function inlineFlag(code, teamNameStr) {
   const src = `https://api.fifa.com/api/v3/picture/flags-sq-2/${c}`;
   const fb  = `this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'flag-badge\\'style=\\'width:18px;height:18px;font-size:7px;\\'>${ini}</span>')`;
   return `<img class="flag" src="${src}" alt="" loading="lazy" style="width:22px;height:16px;vertical-align:middle;" onerror="${fb}">`;
-}
-
-// ╔══════════════════════════════════════════════════╗
-// ║  SCORING ENGINE                                   ║
-// ╚══════════════════════════════════════════════════╝
-function scorePlayer(playerId) {
-  const finished = matches.filter(m => m.status === 'finished');
-  const preds    = DB.getPredictions().filter(p => p.playerId === playerId);
-  const wc       = DB.getWildcards()[playerId] || {};
-  const special  = DB.getSpecial().find(s => s.playerId === playerId);
-
-  let pts=0, exact=0, partial=0, maxStreak=0, curStreak=0, wildcardWin=false, totalPreds=0;
-
-  for (const m of finished) {
-    const p = preds.find(x => x.matchId === m.id);
-    if (!p) { curStreak=0; continue; }
-    totalPreds++;
-    const isWC = wc[m.phase] === m.id;
-    let mp = 0;
-    if (p.homeScore === m.homeScore && p.awayScore === m.awayScore) {
-      mp=3; exact++; curStreak++;
-    } else if (outcome(p.homeScore,p.awayScore) === outcome(m.homeScore,m.awayScore)) {
-      mp=1; partial++; curStreak++;
-    } else { curStreak=0; }
-    if (isWC && mp>0) { mp*=2; wildcardWin=true; }
-    maxStreak = Math.max(maxStreak, curStreak);
-    pts += mp;
-  }
-
-  // Pronósticos especiales
-  const meta = DB.get('meta', {});
-  let championOk = false;
-  if (special?.champion && meta.champion) {
-    if (special.champion.trim().toLowerCase() === meta.champion.trim().toLowerCase()) {
-      pts += 15; championOk = true;
-    }
-  }
-  if (special?.topScorer && meta.topScorer) {
-    if (special.topScorer.trim().toLowerCase() === meta.topScorer.trim().toLowerCase()) pts += 10;
-  }
-
-  return { pts, exact, partial, maxStreak, curStreak, wildcardWin, totalPreds, championOk };
-}
-
-function allScores() {
-  return DB.getPlayers()
-    .map(p => ({ ...p, ...scorePlayer(p.id) }))
-    .sort((a,b) => b.pts - a.pts);
 }
 
 // ╔══════════════════════════════════════════════════╗
@@ -1260,7 +1214,7 @@ const PLAYOFF_PHASES = new Set(['r32','r16','qf','sf','third','final']);
 const WC_QUOTA    = { grupos:1, r32:2, r16:1, qf:1, sf:0, third:0, final:0 };
 const PHASE_MULT  = { grupos:1, r32:2, r16:3, qf:4, sf:5, third:5, final:7 };
 const PEN_BONUS_PTS = { r32:2, r16:4, qf:6, sf:8, third:10, final:12 };
-const MUNDIAL_START = new Date('2026-06-11T00:00:00');
+const MUNDIAL_START = new Date('2026-06-11T00:00:00-03:00');
 const SPECIAL_PTS = { champion:15, subCampeon:8, tercerPuesto:5, topScorer:10 };
 
 // GROUPS: se usa para tabla de posiciones (fallback si FIFA no los provee)
@@ -1905,6 +1859,7 @@ function renderPerfil(con) {
       const total=p?ptsEarnedInMatch(currentPlayer.id,m.id):0;
       const res=p?betResult(p,m.homeScore,m.awayScore):'none';
       const ptsCls=res==='exact'?'exact':res==='partial'?'partial':'wrong';
+      const risk=p?calcRiskBonus(p,m.homeScore,m.awayScore,m.id,activePredictions()):0;
       html+='<div class="hist-row">'+
         '<div class="hist-match"><div class="hist-teams">'+m.homeTeam+' vs '+m.awayTeam+'</div>'+
         '<div class="hist-meta">'+(PHASES[m.phase]||m.phase)+' · '+m.homeScore+'-'+m.awayScore+(isWC?' 🎯':'')+(risk>0?' <span class="risk-badge">🎲 +'+risk+'</span>':'')+'</div></div>'+
@@ -2085,7 +2040,7 @@ function getImprevisibleMatchId() {
     if (on.length < 3) continue;
     const h = on.filter(x=>outcome(x.homeScore,x.awayScore)==='H').length;
     const d = on.filter(x=>outcome(x.homeScore,x.awayScore)==='D').length;
-    const v = on.filter(x=>outcome(x.homeScore,x.awayScore)==='V').length;
+    const v = on.filter(x=>outcome(x.homeScore,x.awayScore)==='A').length;
     const maxPct = Math.max(h,d,v) / on.length;
     if (maxPct > 0.4) continue;
     if ((1 - maxPct) > bestScore) { bestScore = 1 - maxPct; bestId = m.id; }
@@ -3066,7 +3021,7 @@ function renderAdmin(con) {
       <div style="padding:12px 14px;background:rgba(248,113,113,.07);border:.5px solid rgba(248,113,113,.2);border-radius:10px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:4px;">💣 Reiniciar todo</div>
         <div style="font-size:12px;color:var(--text-m);margin-bottom:10px;">Borra absolutamente todo, incluyendo el caché de partidos FIFA.</div>
-        <button class="btn btn-danger" onclick="if(confirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer.'))clearAll()">💣 Borrar todo</button>
+        <button class="btn btn-danger" onclick="clearAll()">💣 Borrar todo</button>
       </div>
 
     </div>
@@ -3075,8 +3030,35 @@ function renderAdmin(con) {
 
 function authAdmin() {
   if (document.getElementById('ap').value === ADMIN_PASS) {
-    adminAuth = true; renderView('admin');
+    adminAuth = true;
+    const navBtn = document.getElementById('nav-admin');
+    if (navBtn) navBtn.style.display = '';
+    renderView('admin');
   } else { toast('Contraseña incorrecta','err'); }
+}
+
+// Acceso oculto al admin: 5 taps rápidos en el logo del header
+let _adminTapCount = 0;
+let _adminTapTimer = null;
+function tryEnableAdmin() {
+  if (adminAuth) { navigate('admin'); return; }
+  _adminTapCount++;
+  clearTimeout(_adminTapTimer);
+  _adminTapTimer = setTimeout(() => { _adminTapCount = 0; }, 2000);
+  if (_adminTapCount >= 5) {
+    _adminTapCount = 0;
+    const pass = prompt('Modo administrador — ingresá la contraseña:');
+    if (pass === null) return;
+    if (pass === ADMIN_PASS) {
+      adminAuth = true;
+      const navBtn = document.getElementById('nav-admin');
+      if (navBtn) navBtn.style.display = '';
+      toast('Modo administrador activo','ok');
+      navigate('admin');
+    } else {
+      toast('Contraseña incorrecta','err');
+    }
+  }
 }
 
 function saveRankSnapshot(matchId, matchLabel) {
@@ -3210,6 +3192,8 @@ function adminResetPin(playerId) {
 
 function clearPlayers() {
   if (!confirm('¿Borrar todos los jugadores y pronósticos?\nLos partidos y resultados de FIFA no se tocan.')) return;
+  const word = prompt('Esta acción es irreversible.\nPara confirmar, escribí la palabra BORRAR en mayúsculas:');
+  if (word !== 'BORRAR') { toast('Borrado cancelado','err'); return; }
   DB.savePlayers([]);
   DB.savePredictions([]);
   DB.saveWildcards({});
@@ -3227,6 +3211,9 @@ function clearPlayers() {
 }
 
 function clearAll() {
+  if (!confirm('¿Borrar TODOS los datos?\nIncluye jugadores, pronósticos, especiales y caché de partidos FIFA. Esta acción no se puede deshacer.')) return;
+  const word = prompt('Última confirmación.\nPara borrar TODO, escribí la palabra BORRAR en mayúsculas:');
+  if (word !== 'BORRAR') { toast('Borrado cancelado','err'); return; }
   DB.savePlayers([]); DB.savePredictions([]); DB.saveWildcards({}); DB.saveSpecial([]); DB.set('meta',{});
   matches = []; localStorage.removeItem(MATCH_CACHE_KEY);
   if (_fbDatabase) _fbDatabase.ref(FB_ROOT + '/fifa_matches').remove().catch(()=>{});
@@ -3321,7 +3308,7 @@ function clearAll() {
 
   // 7. Registrar Service Worker (PWA)
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/mundial2026/sw.js?v=5', { scope: '/mundial2026/' })
+    navigator.serviceWorker.register('/mundial2026/sw.js?v=6', { scope: '/mundial2026/' })
       .then(reg => console.log('SW registrado:', reg.scope))
       .catch(err => console.warn('SW error:', err));
   }
