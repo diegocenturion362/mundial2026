@@ -517,6 +517,59 @@ function savePlayersMerged(nextPlayers) {
   }).catch(err => console.warn('FB players merge error:', err));
 }
 
+function predictionKey(pred) {
+  return String(pred?.playerId || '') + '::' + String(pred?.matchId || '');
+}
+
+function predictionsToArray(val) {
+  const arr = normalizeFirebaseValue(val);
+  return Array.isArray(arr) ? arr.filter(Boolean) : [];
+}
+
+function upsertPredictionLocal(rec) {
+  const key = predictionKey(rec);
+  const current = DB.getPredictions().filter(p => predictionKey(p) !== key);
+  current.push(rec);
+  _cache.predictions = current;
+  return current;
+}
+
+async function savePredictionMerged(rec) {
+  if (!rec || !rec.playerId || !rec.matchId) return false;
+  const key = predictionKey(rec);
+  const previous = DB.getPredictions().slice();
+  const local = upsertPredictionLocal(rec);
+
+  if (!_fbDatabase) {
+    DB.set('predictions', local);
+    return true;
+  }
+
+  try {
+    const result = await _fbDatabase.ref(FB_ROOT + '/predictions').transaction(current => {
+      const remote = predictionsToArray(current);
+      const merged = new Map();
+      remote.forEach(p => {
+        const pKey = predictionKey(p);
+        if (pKey !== '::') merged.set(pKey, p);
+      });
+      merged.set(key, rec);
+      return Array.from(merged.values());
+    });
+    if (result && result.committed === false) {
+      _cache.predictions = previous;
+      return false;
+    }
+    const saved = predictionsToArray(result?.snapshot?.val());
+    if (saved.length) _cache.predictions = saved;
+    return true;
+  } catch(err) {
+    _cache.predictions = previous;
+    console.warn('FB prediction merge error:', err);
+    return false;
+  }
+}
+
 // ── Listeners de tiempo real ──
 const REALTIME_KEYS = ['players', 'predictions', 'wildcards', 'special', 'meta', 'rank_snaps'];
 
@@ -2506,7 +2559,7 @@ function setPenWinner(matchId, isHome) {
   else        { aBtn?.classList.add('active'); hBtn?.classList.remove('active'); }
 }
 
-function savePred(matchId) {
+async function savePred(matchId) {
   const h = document.getElementById('h-'+matchId).value;
   const a = document.getElementById('a-'+matchId).value;
   if (h===''||a==='') { toast('Ingresá ambos marcadores','err'); return; }
@@ -2518,13 +2571,18 @@ function savePred(matchId) {
     if (document.getElementById('pen-h-'+matchId)?.classList.contains('active')) penWinner = m.homeCode;
     else if (document.getElementById('pen-a-'+matchId)?.classList.contains('active')) penWinner = m.awayCode;
   }
-  const preds = DB.getPredictions();
-  const idx   = preds.findIndex(p => p.playerId===currentPlayer.id && p.matchId===matchId);
-  const rec   = { id:genId(), playerId:currentPlayer.id, matchId, homeScore:hInt, awayScore:aInt };
+  const existing = DB.getPredictions().find(p => p.playerId===currentPlayer.id && p.matchId===matchId);
+  const rec = { id:existing?.id || genId(), playerId:currentPlayer.id, matchId, homeScore:hInt, awayScore:aInt };
   if (penWinner) rec.penWinner = penWinner;
-  if (idx>=0) preds[idx]=rec; else preds.push(rec);
-  DB.savePredictions(preds);
   const btn = document.getElementById('sv-'+matchId);
+  if (btn) { btn.textContent='Guardando...'; btn.disabled=true; }
+  const saved = await savePredictionMerged(rec);
+  if (btn) btn.disabled=false;
+  if (!saved) {
+    if (btn) { btn.textContent='Guardar'; btn.classList.remove('saved'); }
+    toast('No se pudo guardar. Revisá conexión','err');
+    return;
+  }
   if (btn) { btn.textContent='✓ Guardado'; btn.classList.add('saved'); }
   toast('Pronóstico guardado ✓','ok');
 }
