@@ -449,7 +449,7 @@ function mapFifaStatus(m) {
   const hasScore = Number.isInteger(m.HomeTeamScore) && Number.isInteger(m.AwayTeamScore);
   const matchTime = String(m.MatchTime || '').trim();
 
-  if ([0,11,12,13].includes(statusCode)) return 'finished';
+  if ([11,12,13].includes(statusCode) || (statusCode === 0 && hasScore)) return 'finished';
   if ([3,4,5,6,9,10].includes(statusCode)) return 'live';
   if (hasScore && matchTime && matchTime !== "0'") return 'live';
   return 'pending';
@@ -1780,7 +1780,7 @@ function renderMisApuestas(con) {
     </div>
     <div class="card" style="text-align:center;padding:12px 8px;">
       <div style="font-size:11px;color:var(--text-m);">Pendientes</div>
-      <div style="font-family:var(--fd);font-size:28px;font-weight:700;color:var(--danger);">${allM.filter(m=>m.status==='upcoming'&&!_predictionIndex.has(`${currentPlayer.id}::${m.id}`)).length}</div>
+      <div style="font-family:var(--fd);font-size:28px;font-weight:700;color:var(--danger);">${allM.filter(m=>m.status==='pending'&&!_predictionIndex.has(`${currentPlayer.id}::${m.id}`)).length}</div>
       <div style="font-size:10px;color:var(--text-d);">por cargar</div>
     </div>
     <div class="card" style="text-align:center;padding:12px 8px;">
@@ -1872,7 +1872,7 @@ function renderMisApuestas(con) {
       const isWC=isWCUsed(wcData, m);
       const pp=pred&&m.homeScore!==null?provPtsForMatch(currentPlayer.id,m.id):null;
       const res=pred&&m.homeScore!==null?betResult(pred,m.homeScore,m.awayScore):'pending';
-      const isOpen=m.status==='upcoming'&&!isClosed(m);
+      const isOpen=m.status==='pending'&&!isClosed(m);
       const isLive=m.status==='live';
       const isFin=m.status==='finished';
       
@@ -2605,7 +2605,7 @@ function adminResetMatch(matchId) {
   const m = matches.find(x => x.id===matchId);
   if (!m) return;
   if (!confirm(`¿Revertir "${m.homeTeam} vs ${m.awayTeam}"?\nEl resultado volverá a depender de FIFA.`)) return;
-  m.status='upcoming';
+  m.status='pending';
   m.homeScore=null;
   m.awayScore=null;
   m.manualOverride=false;
