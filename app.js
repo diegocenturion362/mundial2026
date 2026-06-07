@@ -394,7 +394,9 @@ async function initFirebase() {
 // ╔══════════════════════════════════════════════════╗
 // ║  3. MOTOR DE PARTIDOS DE FIFA                    ║
 // ╚══════════════════════════════════════════════════╝
-const FIFA_URL = "https://api.fifa.com/api/v3/calendar/matches?from=2026-06-10&to=2026-07-20&language=es&count=500";
+// idCompetition=17 filtra solo partidos del Mundial 2026. Sin este parámetro,
+// FIFA devuelve TODO el calendario (incluyendo Liga Española y otras competencias).
+const FIFA_URL = "https://api.fifa.com/api/v3/calendar/matches?from=2026-06-10&to=2026-07-20&language=es&count=500&idCompetition=17";
 let matches = [];
 let fifaLoading = false;
 let fifaSource  = 'Sin datos';
@@ -2546,6 +2548,10 @@ function renderAdmin(con) {
       <button class="fifa-refresh-btn btn btn-primary" id="btn-fifa-admin-refresh" style="padding:7px 14px;font-size:13px;">↻ Actualizar desde FIFA</button>
     </div>
     <p style="font-size:12px;color:var(--text-d);margin-top:.6rem;">El organizador puede refrescar manualmente el estado de partidos desde aquí.</p>
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(248,113,113,.07);border:.5px solid rgba(248,113,113,.2);border-radius:var(--radius-s);">
+      <p style="font-size:12px;color:var(--text-m);margin-bottom:8px;">¿Aparecen partidos que no son del Mundial? Borrá el cache y recargá solo los del Mundial 2026.</p>
+      <button class="btn btn-danger" id="btn-fifa-purge-reload" style="padding:6px 12px;font-size:12px;">🧹 Limpiar y recargar solo Mundial</button>
+    </div>
   </div>
 
   ${finished.length ? `<div class="admin-section">
@@ -2770,6 +2776,26 @@ function adminResetMatch(matchId) {
   m.manualOverride=false;
   saveCachedMatches(matches);
   toast('Partido revertido — esperando datos de FIFA','ok');
+  renderView('admin');
+}
+
+// Borra el cache de partidos y vuelve a cargar desde FIFA con la URL filtrada por Mundial.
+// Útil cuando se mezclaron partidos de otras competencias (ej. Liga Española) en el cache.
+async function adminPurgeAndReloadMatches() {
+  if (!confirm('Esto borra TODOS los partidos del cache y los vuelve a descargar desde FIFA solo con los del Mundial 2026.\n¿Continuar?')) return;
+  matches = [];
+  try { localStorage.removeItem(MATCH_CACHE_KEY); } catch {}
+  if (_fbDatabase) {
+    try {
+      await _fbDatabase.ref(FB_ROOT + '/' + MATCHES_FB_KEY).remove();
+    } catch(err) {
+      console.warn('Error removing matches from Firebase:', err);
+    }
+  }
+  fifaSource = 'Recargando desde FIFA…';
+  updateFifaStrip(fifaSource, true);
+  await loadFifaMatches();
+  toast('✓ Partidos recargados desde FIFA (solo Mundial)', 'ok');
   renderView('admin');
 }
 
@@ -3262,6 +3288,9 @@ function bindAdminLoginEvents() {
 function bindAdminEvents() {
   const btnRefresh = document.getElementById('btn-fifa-admin-refresh');
   if (btnRefresh) btnRefresh.onclick = () => loadFifaMatches();
+
+  const btnPurge = document.getElementById('btn-fifa-purge-reload');
+  if (btnPurge) btnPurge.onclick = adminPurgeAndReloadMatches;
 
   document.querySelectorAll('.btn-admin-revert').forEach(btn => {
     btn.onclick = function() {
