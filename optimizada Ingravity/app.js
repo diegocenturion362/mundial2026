@@ -184,6 +184,8 @@ const DB = {
   saveSnapshots:   v  => DB.set('rank_snaps', v),
   getChat:    (matchId) => DB.get('chat_' + matchId, []),
   saveChat:   (matchId, v) => DB.set('chat_' + matchId, v),
+  getTablas:       () => DB.get('tablas', []),
+  saveTablas:      v  => DB.set('tablas', v),
 };
 
 // Indexar datos de Firebase para búsquedas de alta velocidad O(1)
@@ -259,7 +261,7 @@ async function savePredictionMerged(rec) {
 }
 
 // ── Listeners de tiempo real en Firebase ──
-const REALTIME_KEYS = ['players', 'predictions', 'wildcards', 'special', 'meta', 'rank_snaps'];
+const REALTIME_KEYS = ['players', 'predictions', 'wildcards', 'special', 'meta', 'rank_snaps', 'tablas'];
 
 function normalizeFirebaseValue(val) {
   if (val && typeof val === 'object' && !Array.isArray(val)) {
@@ -306,6 +308,7 @@ function setupFirebaseListeners(db) {
         special: _cache.special,
         meta: _cache.meta,
         rank_snaps: _cache.rank_snaps,
+        tablas: _cache.tablas,
         view: currentView
       });
 
@@ -406,7 +409,12 @@ function loadCachedMatches() {
 function saveCachedMatches(arr) {
   try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(arr)); } catch(e) {}
   if (_fbDatabase && arr && arr.length) {
-    _fbDatabase.ref(FB_ROOT + '/' + MATCHES_FB_KEY).set(arr).catch(() => {});
+    // Transaction con merge: respeta manualOverride y partidos finished/closed que ya estén en Firebase,
+    // evitando que un sync simultáneo (del cliente o del servidor centralizado) pise overrides locales.
+    _fbDatabase.ref(FB_ROOT + '/' + MATCHES_FB_KEY).transaction(current => {
+      const remote = firebaseMatchesToArray(current);
+      return mergeMatchesWithHistory(remote, arr);
+    }).catch(() => {});
   }
 }
 
@@ -746,19 +754,15 @@ function scorePlayer(playerId) {
   const special = DB.getSpecial().find(s => s.playerId === playerId);
   if (special?.champion && meta.champion &&
       special.champion.trim().toLowerCase()===meta.champion.trim().toLowerCase()) {
-    confirmedPts+=15; championOk=true;
+    confirmedPts+=50; championOk=true;
   }
   if (special?.subCampeon && meta.subCampeon &&
       special.subCampeon.trim().toLowerCase()===meta.subCampeon.trim().toLowerCase()) {
-    confirmedPts+=8;
+    confirmedPts+=30;
   }
   if (special?.tercerPuesto && meta.tercerPuesto &&
       special.tercerPuesto.trim().toLowerCase()===meta.tercerPuesto.trim().toLowerCase()) {
-    confirmedPts+=5;
-  }
-  if (special?.topScorer && meta.topScorer &&
-      special.topScorer.trim().toLowerCase()===meta.topScorer.trim().toLowerCase()) {
-    confirmedPts+=10;
+    confirmedPts+=20;
   }
   
   const fun = calcFunStats(playerId);
@@ -767,8 +771,13 @@ function scorePlayer(playerId) {
           maxStreak, curStreak, wildcardWin, totalPreds, championOk, ...fun};
 }
 
-function allScores() {
-  return DB.getPlayers()
+function allScores(filterPlayerIds) {
+  let players = DB.getPlayers();
+  if (Array.isArray(filterPlayerIds)) {
+    const set = new Set(filterPlayerIds.map(String));
+    players = players.filter(p => p && set.has(String(p.id)));
+  }
+  return players
     .map(p => ({...p, ...scorePlayer(p.id)}))
     .sort((a,b) => b.pts - a.pts || b.exact - a.exact);
 }
@@ -1112,7 +1121,7 @@ function capturePredState() {
     const matchId = btn.id.slice(6);
     state.penWinners[matchId] = isHome ? 'home' : 'away';
   });
-  ['sp-champ','sp-sub','sp-third','sp-scorer'].forEach(id => {
+  ['sp-champ','sp-sub','sp-third'].forEach(id => {
     const el = document.getElementById(id);
     if (el && !el.disabled && el.value.trim() !== '') state.specials[id] = el.value;
   });
@@ -1211,14 +1220,13 @@ function renderPredictions(con) {
       <div class="sp-icon">🏆</div>
       <div>
         <div class="sp-title">Pronósticos Especiales</div>
-        <div class="sp-sub">Hasta 38 puntos en juego · ${spLocked ? '🔒 Cerrados al inicio' : 'Editables hasta el inicio'}</div>
+        <div class="sp-sub">Hasta 100 puntos en juego · ${spLocked ? '🔒 Cerrados al inicio' : 'Editables hasta el inicio'}</div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;">
-      ${spRow('🥇 Campeón del Mundial <span style="color:var(--gold);">+15 pts</span>','sp-champ','País campeón',special?.champion,'champion')}
-      ${spRow('🥈 Subcampeón <span style="color:var(--gold);">+8 pts</span>','sp-sub','País subcampeón',special?.subCampeon,'subCampeon')}
-      ${spRow('🥉 Tercer puesto <span style="color:var(--gold);">+5 pts</span>','sp-third','País tercer puesto',special?.tercerPuesto,'tercerPuesto')}
-      ${spRow('⚽ Goleador del torneo <span style="color:var(--gold);">+10 pts</span>','sp-scorer','Nombre del jugador',special?.topScorer,'scorer')}
+      ${spRow('🥇 Campeón del Mundial <span style="color:var(--gold);">+50 pts</span>','sp-champ','País campeón',special?.champion,'champion')}
+      ${spRow('🥈 Subcampeón <span style="color:var(--gold);">+30 pts</span>','sp-sub','País subcampeón',special?.subCampeon,'subCampeon')}
+      ${spRow('🥉 Tercer puesto <span style="color:var(--gold);">+20 pts</span>','sp-third','País tercer puesto',special?.tercerPuesto,'tercerPuesto')}
     </div>
   </div>`;
 
@@ -1509,7 +1517,7 @@ function toggleWC(matchId) {
 
 function saveSpecial(type) {
   if (new Date() >= MUNDIAL_START) { toast('Los pronósticos especiales están cerrados','err'); return; }
-  const idMap = { champion:'sp-champ', subCampeon:'sp-sub', tercerPuesto:'sp-third', scorer:'sp-scorer' };
+  const idMap = { champion:'sp-champ', subCampeon:'sp-sub', tercerPuesto:'sp-third' };
   const val = document.getElementById(idMap[type])?.value.trim();
   if (!val) { toast('Ingresá el valor','err'); return; }
   const specials = DB.getSpecial();
@@ -1518,7 +1526,6 @@ function saveSpecial(type) {
   if (type==='champion') sp.champion=val;
   else if (type==='subCampeon') sp.subCampeon=val;
   else if (type==='tercerPuesto') sp.tercerPuesto=val;
-  else sp.topScorer=val;
   DB.saveSpecial(specials);
   toast('Pronóstico especial guardado 🏆','ok');
   renderView('predictions');
@@ -1931,7 +1938,44 @@ function filterApuestas(filter) {
 // ── VISTA DE RANKING ──
 let rankingView = 'general';
 
-function getMvpData() {
+// ── TABLAS DE RANKING (subagrupaciones independientes) ──
+// Una "tabla" es un grupo de jugadores que comparten un mismo ranking filtrado.
+// Las predicciones, redoblones y especiales siguen siendo globales — solo cambia
+// quién aparece en el ranking de cada tabla.
+const TABLA_GENERAL_ID = '__general__';
+let currentTablaId = (function() {
+  try { return localStorage.getItem('wc26_active_tabla') || TABLA_GENERAL_ID; }
+  catch { return TABLA_GENERAL_ID; }
+})();
+
+function setActiveTabla(id) {
+  currentTablaId = id || TABLA_GENERAL_ID;
+  try { localStorage.setItem('wc26_active_tabla', currentTablaId); } catch {}
+}
+
+function getActiveTabla() {
+  if (currentTablaId === TABLA_GENERAL_ID) return null;
+  const tablas = DB.getTablas();
+  return tablas.find(t => t && t.id === currentTablaId) || null;
+}
+
+// Devuelve la lista de playerIds de la tabla activa, o null si es la General (sin filtro).
+function getActiveTablaPlayerIds() {
+  const t = getActiveTabla();
+  if (!t) return null;
+  return Array.isArray(t.playerIds) ? t.playerIds : [];
+}
+
+// Si la tabla activa fue borrada, volver a General automáticamente.
+function ensureValidActiveTabla() {
+  if (currentTablaId === TABLA_GENERAL_ID) return;
+  const tablas = DB.getTablas();
+  if (!tablas.some(t => t && t.id === currentTablaId)) {
+    setActiveTabla(TABLA_GENERAL_ID);
+  }
+}
+
+function getMvpData(filterPlayerIds) {
   const jornadasMap = {};
   for (const m of matches.filter(x => x.status === 'finished')) {
     const day = new Date(m.kickoff||m.date).toDateString();
@@ -1942,7 +1986,7 @@ function getMvpData() {
   const mvpHistory = [];
 
   sortedDays.forEach((day, i) => {
-    const scores = scoresByJornada(day).filter(p => p.pts > 0);
+    const scores = scoresByJornada(day, filterPlayerIds).filter(p => p.pts > 0);
     if (!scores.length) return;
     const topPts   = scores[0].pts;
     const winners  = scores.filter(p => p.pts === topPts);
@@ -1954,12 +1998,17 @@ function getMvpData() {
   return { mvpCounts, lastMvp };
 }
 
-function scoresByJornada(jornadaKey) {
+function scoresByJornada(jornadaKey, filterPlayerIds) {
   const dayMatches = matches.filter(m => {
     const day = new Date(m.kickoff||m.date).toDateString();
     return m.status==='finished' && day===jornadaKey;
   });
-  return DB.getPlayers().map(p => ({
+  let players = DB.getPlayers();
+  if (Array.isArray(filterPlayerIds)) {
+    const set = new Set(filterPlayerIds.map(String));
+    players = players.filter(p => p && set.has(String(p.id)));
+  }
+  return players.map(p => ({
     ...p,
     pts: dayMatches.reduce((sum, m) => sum + ptsEarnedInMatch(p.id, m.id), 0),
     games: dayMatches.filter(m => _predictionIndex.has(`${p.id}::${m.id}`)).length,
@@ -1967,9 +2016,18 @@ function scoresByJornada(jornadaKey) {
 }
 
 function renderRanking(con) {
-  const scores = allScores();
+  // Validar tabla activa y obtener el filtro de jugadores
+  ensureValidActiveTabla();
+  const tablas = DB.getTablas();
+  const filterPlayerIds = getActiveTablaPlayerIds();
+  const activeTabla = getActiveTabla();
+
+  const scores = allScores(filterPlayerIds);
   if (!scores.length) {
-    con.innerHTML='<div class="empty"><div class="empty-icon">👥</div><p>Aún no hay jugadores registrados.</p></div>'; return;
+    const isFiltered = filterPlayerIds !== null;
+    con.innerHTML = `${renderTablaChips(tablas)}<div class="empty"><div class="empty-icon">👥</div><p>${isFiltered?'Esta tabla aún no tiene jugadores asignados con puntos.':'Aún no hay jugadores registrados.'}</p></div>`;
+    bindRankingEvents();
+    return;
   }
 
   const jornadasMap = {};
@@ -1979,6 +2037,9 @@ function renderRanking(con) {
   }
   const jornadas = Object.keys(jornadasMap);
 
+  // Chips de tabla (arriba), seguidos de chips de jornada
+  const tablaChipsHTML = renderTablaChips(tablas);
+
   let tabsHTML = `<div class="jornada-tabs">
     <button class="jornada-tab btn-tab-rank ${rankingView==='general' ? 'active' : ''}" data-target="general">📊 General</button>`;
   jornadas.forEach((day, i) => {
@@ -1986,10 +2047,10 @@ function renderRanking(con) {
   });
   tabsHTML += '</div>';
 
-  const { mvpCounts, lastMvp } = getMvpData();
+  const { mvpCounts, lastMvp } = getMvpData(filterPlayerIds);
 
   if (rankingView !== 'general') {
-    const jScores    = scoresByJornada(rankingView).filter(p => p.games > 0 || p.pts > 0);
+    const jScores    = scoresByJornada(rankingView, filterPlayerIds).filter(p => p.games > 0 || p.pts > 0);
     const dayMatches = matches.filter(m => new Date(m.kickoff||m.date).toDateString() === rankingView && m.status === 'finished');
     const matchSummary = dayMatches.map(m => m.homeTeam+' '+m.homeScore+'-'+m.awayScore+' '+m.awayTeam).join(' · ');
     const jTopPts    = jScores.length ? jScores[0].pts : -1;
@@ -2012,7 +2073,7 @@ function renderRanking(con) {
     });
     
     if (!jScores.length) rowsHTML = '<div style="padding:16px;text-align:center;color:var(--text-d);font-size:13px;">Nadie apostó en esta jornada</div>';
-    con.innerHTML = tabsHTML +
+    con.innerHTML = tablaChipsHTML + tabsHTML +
       `<div style="font-size:12px;color:var(--text-m);margin:8px 0 10px;">${matchSummary}</div>
       <div class="card" style="padding:0 16px;">${rowsHTML}</div>`;
     bindRankingEvents();
@@ -2097,8 +2158,22 @@ function renderRanking(con) {
   });
   tableHTML += '</div>';
 
-  con.innerHTML = tabsHTML + mvpCardHTML + podHTML + tableHTML;
+  con.innerHTML = tablaChipsHTML + tabsHTML + mvpCardHTML + podHTML + tableHTML;
   bindRankingEvents();
+}
+
+// Render de chips de tabla: "📊 General" + un chip por cada tabla creada.
+// Si no hay tablas creadas, no se muestra nada (UI queda como antes).
+function renderTablaChips(tablas) {
+  if (!Array.isArray(tablas) || tablas.length === 0) return '';
+  let html = '<div class="jornada-tabs" style="margin-bottom:8px;">';
+  html += `<button class="jornada-tab btn-tab-tabla ${currentTablaId===TABLA_GENERAL_ID?'active':''}" data-tabla-id="${TABLA_GENERAL_ID}">📊 General</button>`;
+  for (const t of tablas) {
+    if (!t || !t.id) continue;
+    html += `<button class="jornada-tab btn-tab-tabla ${currentTablaId===t.id?'active':''}" data-tabla-id="${t.id}">${escapeHtml(t.name)}</button>`;
+  }
+  html += '</div>';
+  return html;
 }
 
 // ── VISTA DE GRUPOS (POSICIONES) ──
@@ -2218,6 +2293,38 @@ function getImprevisibleMatchId() {
 // ── VISTA DE MI PERFIL ──
 let perfilTab = 'stats';
 
+// Render de la posición del jugador actual en cada tabla donde participa.
+// Devuelve string vacío si no hay tablas creadas (no muestra el bloque).
+function renderMyTablasPositionCard() {
+  const tablas = DB.getTablas();
+  if (!Array.isArray(tablas) || tablas.length === 0) return '';
+  const myTablas = tablas.filter(t => t && Array.isArray(t.playerIds) && t.playerIds.includes(currentPlayer.id));
+
+  let rows = renderMyTablaPositionRow(null, 'General', '📊');
+  myTablas.forEach(t => { rows += renderMyTablaPositionRow(t.playerIds, t.name, '👥'); });
+
+  return `<div class="card" style="margin-bottom:10px;">
+    <div style="font-size:12px;color:var(--text-m);margin-bottom:10px;">📊 Tu posición en cada tabla</div>
+    <div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>
+  </div>`;
+}
+
+function renderMyTablaPositionRow(playerIds, label, icon) {
+  const scores = allScores(playerIds);
+  const myIdx = scores.findIndex(s => s.id === currentPlayer.id);
+  if (myIdx < 0) return '';
+  const rank = myIdx + 1;
+  const total = scores.length;
+  const isFirst = rank === 1;
+  const rankColor = rank === 1 ? 'var(--gold)' : rank === 2 ? 'var(--silver)' : rank === 3 ? 'var(--bronze)' : 'var(--text)';
+  return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:.5px solid var(--border);">
+    <span style="font-size:14px;flex-shrink:0;width:18px;text-align:center;">${icon}</span>
+    <span style="font-size:13px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</span>
+    <span style="font-family:var(--fd);font-size:20px;font-weight:800;color:${rankColor};">#${rank}${isFirst?' 🏆':''}</span>
+    <span style="font-size:11px;color:var(--text-m);min-width:42px;text-align:right;">de ${total}</span>
+  </div>`;
+}
+
 function renderPerfil(con) {
   const scores=allScores();
   const myRank=scores.findIndex(s=>s.id===currentPlayer.id)+1;
@@ -2270,6 +2377,7 @@ function renderPerfil(con) {
       <div class="stat-card"><div class="stat-val" style="color:var(--gold);">${sc.maxStreak||0}</div><div class="stat-lbl">🔥 Racha máx.</div></div>
       <div class="stat-card"><div class="stat-val" style="color:var(--text-m);">${myPreds.length}</div><div class="stat-lbl">Apostados</div></div>
     </div>
+    ${renderMyTablasPositionCard()}
     <div class="card" style="margin-bottom:10px;">
       <div style="font-size:12px;color:var(--text-m);margin-bottom:8px;">Tu marcador favorito</div>
       <div style="font-family:var(--fd);font-size:32px;font-weight:800;color:var(--accent);">${favScore?favScore[0]:'–'}</div>
@@ -2474,35 +2582,86 @@ function renderAdmin(con) {
     <div class="sec-title">Validar pronósticos especiales</div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div>
-        <div class="form-label">🥇 Campeón del Mundial (+15 pts)</div>
+        <div class="form-label">🥇 Campeón del Mundial (+50 pts)</div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="meta-champ" placeholder="País campeón" value="${meta.champion||''}">
           <button class="btn btn-gold btn-admin-save-meta" data-meta-type="champion" data-input-id="meta-champ">Guardar</button>
         </div>
       </div>
       <div>
-        <div class="form-label">Subcampeón (+8 pts)</div>
+        <div class="form-label">Subcampeón (+30 pts)</div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="meta-sub" placeholder="País subcampeón" value="${meta.subCampeon||''}">
           <button class="btn btn-gold btn-admin-save-meta" data-meta-type="subCampeon" data-input-id="meta-sub">Guardar</button>
         </div>
       </div>
       <div>
-        <div class="form-label">Tercer puesto (+5 pts)</div>
+        <div class="form-label">Tercer puesto (+20 pts)</div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="meta-third" placeholder="País tercer puesto" value="${meta.tercerPuesto||''}">
           <button class="btn btn-gold btn-admin-save-meta" data-meta-type="tercerPuesto" data-input-id="meta-third">Guardar</button>
         </div>
       </div>
-      <div>
-        <div class="form-label">Goleador del torneo (+10 pts)</div>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="meta-scorer" placeholder="Nombre del goleador" value="${meta.topScorer||''}">
-          <button class="btn btn-gold btn-admin-save-meta" data-meta-type="scorer" data-input-id="meta-scorer">Guardar</button>
-        </div>
-      </div>
     </div>
   </div>
+
+  ${(() => {
+    const tablas = DB.getTablas();
+    const players = DB.getPlayers();
+    const editingTabla = _editingTablaId ? tablas.find(t => t && t.id === _editingTablaId) : null;
+    return `<div class="admin-section">
+      <div class="sec-title">📊 Tablas de ranking</div>
+      <p style="font-size:12px;color:var(--text-m);margin-bottom:.75rem;">
+        Creá agrupaciones para que el ranking muestre solo a ciertos jugadores.
+        Las predicciones, redoblones y especiales siguen siendo globales — solo cambia quiénes aparecen en la tabla.
+      </p>
+
+      <div style="padding:12px 14px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border-md);margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">
+          ${editingTabla ? '✏️ Editando tabla' : '➕ Crear nueva tabla'}
+        </div>
+        <input id="tabla-name-input" type="text" placeholder="Nombre (ej: Familia)"
+               value="${editingTabla?.name || ''}" maxlength="30" style="margin-bottom:10px;">
+        ${players.length === 0
+          ? '<p style="font-size:12px;color:var(--text-d);">No hay jugadores registrados aún.</p>'
+          : `<div style="font-size:11px;color:var(--text-m);margin-bottom:6px;">Jugadores incluidos:</div>
+             <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;max-height:240px;overflow-y:auto;padding-right:4px;">
+               ${players.map(p => `
+                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;padding:4px 0;">
+                   <input type="checkbox" class="tabla-player-cb" data-player-id="${p.id}"
+                          ${editingTabla?.playerIds?.includes(p.id) ? 'checked' : ''}
+                          style="width:16px;height:16px;accent-color:var(--accent);">
+                   ${p.name}
+                 </label>
+               `).join('')}
+             </div>`}
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" id="btn-admin-save-tabla" style="flex:1;">
+            ${editingTabla ? '💾 Guardar cambios' : '✓ Crear tabla'}
+          </button>
+          ${editingTabla ? '<button class="btn btn-secondary" id="btn-admin-cancel-tabla">Cancelar</button>' : ''}
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text-m);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">
+        Tablas existentes (${tablas.length})
+      </div>
+      ${tablas.length === 0
+        ? '<p style="font-size:12px;color:var(--text-d);text-align:center;padding:8px;">Aún no creaste tablas. Tu ranking sigue mostrando a todos los jugadores.</p>'
+        : tablas.map(t => `
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border);margin-bottom:7px;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.name)}</div>
+                <div style="font-size:11px;color:var(--text-m);">
+                  ${(t.playerIds||[]).length} jugador${(t.playerIds||[]).length !== 1 ? 'es' : ''}
+                </div>
+              </div>
+              <button class="btn btn-secondary btn-admin-edit-tabla" data-tabla-id="${t.id}" style="padding:5px 10px;font-size:11px;flex-shrink:0;">Editar</button>
+              <button class="btn btn-danger btn-admin-delete-tabla" data-tabla-id="${t.id}" style="padding:5px 10px;font-size:11px;flex-shrink:0;">✕</button>
+            </div>
+          `).join('')}
+    </div>`;
+  })()}
 
   <div class="admin-section">
     <div class="sec-title">Copias de seguridad</div>
@@ -2621,7 +2780,6 @@ function saveMeta(type, inputId) {
   if (type==='champion') meta.champion=val;
   else if (type==='subCampeon') meta.subCampeon=val;
   else if (type==='tercerPuesto') meta.tercerPuesto=val;
-  else meta.topScorer=val;
   DB.set('meta',meta);
   toast('Guardado — se recalculan los puntos especiales ✓','ok');
 }
@@ -2646,18 +2804,45 @@ function importData() {
   input.onchange = e => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => {
+    reader.onload = async ev => {
       try {
         const d = JSON.parse(ev.target.result);
+        if (!confirm('Esta acción reemplaza TODOS los datos actuales por los del archivo.\n¿Continuar?')) return;
+
         if (d.players)     DB.savePlayers(d.players);
         if (d.matches)     { matches = d.matches; saveCachedMatches(matches); }
-        if (d.predictions) DB.savePredictions(d.predictions);
         if (d.wildcards)   DB.saveWildcards(d.wildcards);
         if (d.special)     DB.saveSpecial(d.special);
         if (d.meta)        DB.set('meta',d.meta);
+
+        // Predicciones: convertir el array del backup a formato nested {playerId/matchId}
+        // y escribir en una sola operación atómica para no mezclar formatos viejos con nuevos.
+        if (Array.isArray(d.predictions)) {
+          const nested = {};
+          for (const p of d.predictions) {
+            if (!p || !p.playerId || !p.matchId) continue;
+            if (!nested[p.playerId]) nested[p.playerId] = {};
+            nested[p.playerId][p.matchId] = {
+              id: p.id || `${p.playerId}::${p.matchId}`,
+              homeScore: Number.isInteger(p.homeScore) ? p.homeScore : null,
+              awayScore: Number.isInteger(p.awayScore) ? p.awayScore : null,
+              penWinner: p.penWinner || null
+            };
+          }
+          if (_fbDatabase) {
+            // set() reemplaza el nodo completo, eliminando cualquier formato viejo previo
+            await _fbDatabase.ref(`${FB_ROOT}/predictions`).set(nested).catch(err => fbErrorToast('import predictions', err));
+          } else {
+            _cache.predictions = d.predictions.filter(Boolean);
+          }
+        }
+
         toast('Datos importados ✓','ok');
         renderView('admin');
-      } catch { toast('Archivo inválido','err'); }
+      } catch(err) {
+        console.error('Import error:', err);
+        toast('Archivo inválido','err');
+      }
     };
     reader.readAsText(file);
   };
@@ -2686,6 +2871,61 @@ function adminResetPin(playerId, name) {
     toast(`PIN de ${name} reseteado ✓`, 'ok');
     renderView('admin');
   }
+}
+
+// ── Tablas de ranking (admin) ──
+let _editingTablaId = null;
+
+function adminStartEditTabla(id) {
+  _editingTablaId = id;
+  renderView('admin');
+}
+
+function adminCancelEditTabla() {
+  _editingTablaId = null;
+  renderView('admin');
+}
+
+function adminSaveTabla() {
+  const nameInput = document.getElementById('tabla-name-input');
+  const name = nameInput?.value.trim();
+  if (!name) { toast('Ingresá el nombre de la tabla','err'); return; }
+
+  const playerIds = Array.from(document.querySelectorAll('.tabla-player-cb'))
+    .filter(cb => cb.checked)
+    .map(cb => cb.dataset.playerId);
+
+  if (playerIds.length === 0 && !confirm('No seleccionaste jugadores. ¿Crear tabla vacía igual?')) return;
+
+  const tablas = DB.getTablas();
+  if (_editingTablaId) {
+    const tabla = tablas.find(t => t && t.id === _editingTablaId);
+    if (tabla) { tabla.name = name; tabla.playerIds = playerIds; }
+    toast(`Tabla "${name}" actualizada ✓`, 'ok');
+  } else {
+    tablas.push({
+      id: 'tabla_' + genId(),
+      name,
+      playerIds,
+      createdAt: Date.now()
+    });
+    toast(`Tabla "${name}" creada ✓`, 'ok');
+  }
+  DB.saveTablas(tablas);
+  _editingTablaId = null;
+  renderView('admin');
+}
+
+function adminDeleteTabla(id) {
+  const tablas = DB.getTablas();
+  const tabla = tablas.find(t => t && t.id === id);
+  if (!tabla) return;
+  if (!confirm(`¿Borrar la tabla "${tabla.name}"?\nLos jugadores y sus puntos NO se borran, solo se elimina esta agrupación.`)) return;
+  DB.saveTablas(tablas.filter(t => t && t.id !== id));
+  if (currentTablaId === id) setActiveTabla(TABLA_GENERAL_ID);
+  if (_editingTablaId === id) _editingTablaId = null;
+  toast(`Tabla "${tabla.name}" eliminada ✓`, 'ok');
+  renderView('admin');
 }
 
 function clearAll() {
@@ -2748,7 +2988,7 @@ function reglamentoHTML() {
     </table>
     <div style="margin-top:10px;font-size:11px;"><strong style="color:var(--text);">Multiplicadores:</strong> Grupos ×1 · 16vos ×2 · 8vos ×3 · Cuartos ×4 · Semis/3er ×5 · Final ×7</div>
     <div style="margin-top:6px;font-size:11px;"><strong style="color:var(--text);">Redoblones:</strong> 1 por grupo · 16vos: 2 · 8vos: 1 · Cuartos: 1 · Semis/Final: sin redoblona</div>
-    <div style="margin-top:10px;font-size:11px;background:rgba(251,191,36,.08);border:.5px solid rgba(251,191,36,.25);border-radius:6px;padding:8px 10px;"><strong style="color:var(--gold);">Especiales:</strong> Goleador +10 · Campeón +15 · Subcampeón +8 · Tercer puesto +5</div>
+    <div style="margin-top:10px;font-size:11px;background:rgba(251,191,36,.08);border:.5px solid rgba(251,191,36,.25);border-radius:6px;padding:8px 10px;"><strong style="color:var(--gold);">Especiales:</strong> Campeón +50 · Subcampeón +30 · Tercer puesto +20</div>
   </div>`;
 }
 
@@ -2784,7 +3024,7 @@ function getRulesContent(tab) {
     <div class="rules-section">
       <div class="rules-section-title">Especiales</div>
       <p style="font-size:13px;color:var(--text-m);line-height:1.6;">
-        Predicciones a largo plazo cargadas antes del inicio del torneo: Campeón (+15 pts), Subcampeón (+8 pts), Tercer puesto (+5 pts) y Goleador (+10 pts).
+        Predicciones a largo plazo cargadas antes del inicio del torneo: Campeón (+50 pts), Subcampeón (+30 pts) y Tercer puesto (+20 pts).
       </p>
     </div>`;
   if (tab === 'faq') return `
@@ -2970,6 +3210,16 @@ function bindRankingEvents() {
       renderView('ranking');
     };
   });
+
+  // Selector de tabla: cambiar la tabla activa y re-renderizar
+  document.querySelectorAll('.btn-tab-tabla').forEach(btn => {
+    btn.onclick = function() {
+      setActiveTabla(this.dataset.tablaId);
+      // Al cambiar de tabla, volver siempre a la vista general (no la jornada específica)
+      rankingView = 'general';
+      renderView('ranking');
+    };
+  });
 }
 
 // Vincular eventos de perfil
@@ -3051,6 +3301,25 @@ function bindAdminEvents() {
 
   const btnClearAll = document.getElementById('btn-admin-clear-all');
   if (btnClearAll) btnClearAll.onclick = clearAll;
+
+  // Tablas de ranking: crear / editar / cancelar / borrar
+  const btnSaveTabla = document.getElementById('btn-admin-save-tabla');
+  if (btnSaveTabla) btnSaveTabla.onclick = adminSaveTabla;
+
+  const btnCancelTabla = document.getElementById('btn-admin-cancel-tabla');
+  if (btnCancelTabla) btnCancelTabla.onclick = adminCancelEditTabla;
+
+  document.querySelectorAll('.btn-admin-edit-tabla').forEach(btn => {
+    btn.onclick = function() {
+      adminStartEditTabla(this.dataset.tablaId);
+    };
+  });
+
+  document.querySelectorAll('.btn-admin-delete-tabla').forEach(btn => {
+    btn.onclick = function() {
+      adminDeleteTabla(this.dataset.tablaId);
+    };
+  });
 }
 
 // ╔══════════════════════════════════════════════════╗
@@ -3176,7 +3445,7 @@ function bindAdminEvents() {
 
   // 7. Registrar Service Worker (PWA)
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/mundial2026/optimizada/sw.js?v=6', { scope: '/mundial2026/optimizada/' })
+    navigator.serviceWorker.register('/mundial2026/sw.js?v=6', { scope: '/mundial2026/' })
       .then(reg => console.log('SW registrado:', reg.scope))
       .catch(err => console.warn('SW error:', err));
   }

@@ -131,7 +131,7 @@ function mapFifaStatus(m) {
   const hasScore = Number.isInteger(m.HomeTeamScore) && Number.isInteger(m.AwayTeamScore);
   const matchTime = String(m.MatchTime || '').trim();
 
-  if ([0,11,12,13].includes(statusCode)) return 'finished';
+  if ([11,12,13].includes(statusCode) || (statusCode === 0 && hasScore)) return 'finished';
   if ([3,4,5,6,9,10].includes(statusCode)) return 'live';
   if (hasScore && matchTime && matchTime !== "0'") return 'live';
   return 'pending';

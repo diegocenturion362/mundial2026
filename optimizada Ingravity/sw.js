@@ -1,13 +1,13 @@
 // ALBIPOLLA Service Worker (Versión Optimizada)
-const CACHE_NAME = 'albipolla-opt-v1';
+const CACHE_NAME = 'albipolla-opt-v2';
 
 const PRECACHE = [
-  '/mundial2026/optimizada/',
-  '/mundial2026/optimizada/index.html',
-  '/mundial2026/optimizada/app.js',
-  '/mundial2026/optimizada/albipolla-icon-192-v5.png',
-  '/mundial2026/optimizada/albipolla-icon-512-v5.png',
-  '/mundial2026/optimizada/manifest.json',
+  '/mundial2026/',
+  '/mundial2026/index.html',
+  '/mundial2026/app.js',
+  '/mundial2026/albipolla-icon-192-v5.png',
+  '/mundial2026/albipolla-icon-512-v5.png',
+  '/mundial2026/manifest.json',
 ];
 
 self.addEventListener('install', event => {
@@ -52,7 +52,7 @@ self.addEventListener('fetch', event => {
           caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
         }
         return res;
-      }).catch(() => caches.match(event.request).then(c => c || caches.match('/mundial2026/optimizada/')))
+      }).catch(() => caches.match(event.request).then(c => c || caches.match('/mundial2026/')))
     );
   } else {
     event.respondWith(
@@ -62,7 +62,7 @@ self.addEventListener('fetch', event => {
           if (!res || res.status !== 200 || res.type === 'opaque') return res;
           caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
           return res;
-        }).catch(() => caches.match('/mundial2026/optimizada/'));
+        }).catch(() => caches.match('/mundial2026/'));
       })
     );
   }
