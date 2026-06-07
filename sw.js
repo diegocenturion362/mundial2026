@@ -1,5 +1,5 @@
 // ALBIPOLLA Service Worker (Versión Optimizada)
-const CACHE_NAME = 'albipolla-opt-v4';
+const CACHE_NAME = 'albipolla-opt-v6';
 
 const PRECACHE = [
   '/mundial2026/',
@@ -45,7 +45,11 @@ self.addEventListener('fetch', event => {
     url.pathname.endsWith('.html') ||
     url.pathname.endsWith('/');
 
-  if (isHTML) {
+  // app.js y sw.js: network-first (siempre ir a la red, evita servir versión vieja cacheada).
+  // Si la red falla, recién entonces servir del cache como fallback.
+  const isCriticalCode = url.pathname.endsWith('/app.js') || url.pathname.endsWith('/sw.js');
+
+  if (isHTML || isCriticalCode) {
     event.respondWith(
       fetch(event.request).then(res => {
         if (res && res.status === 200) {

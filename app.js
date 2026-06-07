@@ -325,25 +325,17 @@ function setupFirebaseListeners(db) {
   db.ref(FB_ROOT + '/' + MATCHES_FB_KEY).on('value', snap => {
     const raw = snap.val();
     if (!raw) return;
-    // Filtro defensivo: solo partidos del Mundial entran al merge.
-    const val = filterMundialOnly(firebaseMatchesToArray(raw));
+    const val = firebaseMatchesToArray(raw);
     if (!val.length) return;
 
     const merged = mergeMatchesWithHistory(matches, val);
     const prev = JSON.stringify(matches);
     const next = JSON.stringify(merged);
 
-    if (prev === next) return; // Salir si no hay cambios
+    if (prev === next) return;
 
     matches = merged;
     try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(matches)); } catch(e) {}
-
-    // Si Firebase tenía partidos basura, ahora que están filtrados, reescribimos Firebase
-    // limpio. Esto auto-corrige el nodo para todos los clientes sin que el admin haga nada.
-    const rawCount = firebaseMatchesToArray(raw).length;
-    if (rawCount > val.length && _fbDatabase) {
-      _fbDatabase.ref(FB_ROOT + '/' + MATCHES_FB_KEY).set(merged).catch(() => {});
-    }
 
     if (currentPlayer && !document.activeElement?.matches('input,textarea,select')) {
       renderView(currentView);
@@ -358,7 +350,7 @@ function loadCachedMatchesFromFirebase(callback) {
       .then(snap => {
         if (!snap) return callback([]);
         const val = snap.val();
-        const arr = filterMundialOnly(firebaseMatchesToArray(val));
+        const arr = firebaseMatchesToArray(val);
         callback(arr.length ? arr : []);
       }).catch(() => callback([]));
   } else {
@@ -409,42 +401,17 @@ let matches = [];
 let fifaLoading = false;
 let fifaSource  = 'Sin datos';
 
-// Filtro automático: solo partidos del Mundial 2026 (rango de fechas oficial)
-// o partidos con override manual del admin. Cualquier otro partido (Liga Española, etc.)
-// se descarta automáticamente en TODO lugar donde se carguen o mergeen partidos.
-const MUNDIAL_DATE_START = new Date('2026-06-10T00:00:00Z').getTime();
-const MUNDIAL_DATE_END   = new Date('2026-07-21T00:00:00Z').getTime();
-function isMundialMatch(m) {
-  if (!m) return false;
-  if (m.manualOverride === true) return true;
-  const date = m.kickoff || m.date;
-  if (!date) return false;
-  const t = new Date(date).getTime();
-  if (isNaN(t)) return false;
-  return t >= MUNDIAL_DATE_START && t <= MUNDIAL_DATE_END;
-}
-function filterMundialOnly(arr) {
-  return Array.isArray(arr) ? arr.filter(isMundialMatch) : [];
-}
-
 function loadCachedMatches() {
   try {
     const d = JSON.parse(localStorage.getItem(MATCH_CACHE_KEY) || '[]');
-    return filterMundialOnly(Array.isArray(d) ? d : []);
+    return Array.isArray(d) ? d : [];
   } catch { return []; }
 }
 
 function saveCachedMatches(arr) {
-  // Filtro defensivo: solo persistir partidos del Mundial 2026.
-  const cleanArr = filterMundialOnly(arr);
-  try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(cleanArr)); } catch(e) {}
-  if (_fbDatabase && cleanArr.length) {
-    // Transaction con merge: respeta manualOverride y partidos finished/closed que ya estén en Firebase,
-    // evitando que un sync simultáneo (del cliente o del servidor centralizado) pise overrides locales.
-    _fbDatabase.ref(FB_ROOT + '/' + MATCHES_FB_KEY).transaction(current => {
-      const remote = filterMundialOnly(firebaseMatchesToArray(current));
-      return mergeMatchesWithHistory(remote, cleanArr);
-    }).catch(() => {});
+  try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(arr)); } catch(e) {}
+  if (_fbDatabase && arr && arr.length) {
+    _fbDatabase.ref(FB_ROOT + '/' + MATCHES_FB_KEY).set(arr).catch(() => {});
   }
 }
 
@@ -454,10 +421,9 @@ function sortMatchesChronologically(arr) {
 
 function mergeMatchesWithHistory(existing, fresh) {
   const byId = new Map();
-  // Filtro: solo entran al merge partidos del Mundial 2026 (o con override manual).
-  for (const m of existing || []) { if (m && m.id && isMundialMatch(m)) byId.set(String(m.id), m); }
+  for (const m of existing || []) { if (m && m.id) byId.set(String(m.id), m); }
   for (const m of fresh || []) {
-    if (!m || !m.id || !isMundialMatch(m)) continue;
+    if (!m || !m.id) continue;
     const id = String(m.id);
     const cached = byId.get(id);
     if (!cached) { byId.set(id, m); continue; }
@@ -553,7 +519,28 @@ async function loadFifaMatches({ silent = false } = {}) {
 
     if (!fresh.length) throw new Error('FIFA devolvió 0 partidos');
 
-    matches = mergeMatchesWithHistory(matches, fresh);
+    // SOBREESCRIBIR matches con el feed de FIFA (que ya viene filtrado por idCompetition=17).
+    // Esto descarta automáticamente cualquier partido basura que estuviera en cache.
+    // Preservamos: el resultado de partidos finalizados (FIFA puede tardar en actualizar)
+    // y cualquier override manual del admin sobre partidos del Mundial.
+    const freshById = new Map(fresh.map(m => [String(m.id), m]));
+    const preserved = [];
+    for (const old of matches) {
+      if (!old || !old.id) continue;
+      const id = String(old.id);
+      if (freshById.has(id)) {
+        // Si tenía manualOverride o estaba finished, mantenemos esos campos
+        if (old.manualOverride || (old.status === 'finished' && freshById.get(id).status !== 'finished')) {
+          freshById.set(id, { ...freshById.get(id), ...old });
+        }
+      } else if (old.manualOverride) {
+        // Override manual de un partido que FIFA ya no devuelve: lo preservamos
+        preserved.push(old);
+      }
+      // Cualquier otro partido viejo que no esté en fresh: SE DESCARTA (basura)
+    }
+    matches = [...Array.from(freshById.values()), ...preserved]
+      .sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
     saveCachedMatches(matches);
 
     const newlyFinished = matches.filter(m => m.status === 'finished' && !prevFinished.has(m.id));
@@ -1178,7 +1165,7 @@ function restorePredState(state) {
 function renderView(v) {
   const c = document.getElementById('main-content');
   if (!c) return;
-  
+
   if (v === 'predictions') {
     const saved = capturePredState();
     renderPredictions(c);
