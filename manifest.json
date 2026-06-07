@@ -1,7 +1,7 @@
 {
-  "name": "ALBIPOLLA",
+  "name": "ALBIPOLLA Optimizada",
   "short_name": "ALBIPOLLA",
-  "description": "Pronosticos entre amigos",
+  "description": "Pronósticos entre amigos - Versión Optimizada",
   "start_url": "/mundial2026/",
   "scope": "/mundial2026/",
   "display": "standalone",
