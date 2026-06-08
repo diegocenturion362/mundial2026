@@ -917,9 +917,16 @@ function pointsBreakdownForMatch(playerId, m, pred) {
 // ║  5. UTILS Y AUXILIARES DE UI                     ║
 // ╚══════════════════════════════════════════════════╝
 const genId    = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
-const initials = n => n.trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
+const initials = n => (n||'').trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
 const color    = idx => AVATAR_COLORS[idx % AVATAR_COLORS.length];
 const outcome  = (h,a) => h>a?'H':a>h?'A':'D';
+
+// displayName: nombre público que ven todos. Si el jugador no setea uno, fallback al username (name).
+function displayName(p) {
+  if (!p) return '?';
+  const dn = (p.displayName || '').trim();
+  return dn || p.name || '?';
+}
 
 function fmtDate(d) {
   try {
@@ -940,7 +947,7 @@ function toast(msg, type='') {
 function avaEl(player, size=36) {
   const c  = color(player.colorIdx);
   const fs = Math.round(size * 0.38);
-  return `<div class="ava" style="width:${size}px;height:${size}px;background:${c.bg};color:${c.tc};font-size:${fs}px;">${initials(player.name)}</div>`;
+  return `<div class="ava" style="width:${size}px;height:${size}px;background:${c.bg};color:${c.tc};font-size:${fs}px;">${initials(displayName(player))}</div>`;
 }
 
 function renderFlag(code, teamNameStr) {
@@ -1134,10 +1141,10 @@ function showApp() {
   const av = document.getElementById('header-ava');
   if (av) {
     av.style.background = c.bg; av.style.color = c.tc;
-    av.textContent = initials(currentPlayer.name);
+    av.textContent = initials(displayName(currentPlayer));
   }
   const nameEl = document.getElementById('header-name');
-  if (nameEl) nameEl.textContent = currentPlayer.name;
+  if (nameEl) nameEl.textContent = displayName(currentPlayer);
 
   navigate('predictions');
   const hasLive = matches.some(m => m.status === 'live');
@@ -1653,7 +1660,7 @@ function renderBetsPanel(m) {
 
     rowsHTML += `<div class="bet-row ${isMe?'is-me':''}" style="${rowBg}">
       ${avaEl(pl, 26)}
-      <span style="font-size:13px;flex:1;${isMe?'font-weight:600;':''}">${pl.name}${isMe?' <span style="font-size:10px;color:var(--accent);">(vos)</span>':''}</span>
+      <span style="font-size:13px;flex:1;${isMe?'font-weight:600;':''}">${displayName(pl)}${isMe?' <span style="font-size:10px;color:var(--accent);">(vos)</span>':''}</span>
       ${isWC?'<span class="bet-badge">🎯</span>':''}
       ${risk>0?`<span class="risk-badge">🎲+${risk}</span>`:''}
       <div style="flex-shrink:0;min-width:38px;text-align:center;">
@@ -1739,10 +1746,10 @@ function renderChatPanel(matchId) {
       const timeAgo=fmtAgo(msg.ts);
       const myReactions=msg.reactions||{};
       html+=`<div class="chat-msg ${isMe?'mine':''}">
-        <div class="ava" style="width:26px;height:26px;background:${c.bg};color:${c.tc};font-size:10px;flex-shrink:0;">${initials(sender.name)}</div>
+        <div class="ava" style="width:26px;height:26px;background:${c.bg};color:${c.tc};font-size:10px;flex-shrink:0;">${initials(displayName(sender))}</div>
         <div>
           <div class="chat-bubble">${escapeHtml(msg.text)}</div>
-          <div class="chat-meta">${isMe?'Vos':sender.name} · ${timeAgo}</div>
+          <div class="chat-meta">${isMe?'Vos':displayName(sender)} · ${timeAgo}</div>
           <div class="chat-reactions">
             ${REACTIONS.map(emoji => {
               const who = myReactions[emoji] || [];
@@ -2106,7 +2113,7 @@ function renderRanking(con) {
         <span class="rank-num">${i+1}</span>
         ${avaEl(p, 32)}
         <div class="rank-info">
-          <div class="rank-name">${p.name}${isMe?' <span style="font-size:10px;color:var(--accent);">· vos</span>':''}</div>
+          <div class="rank-name">${displayName(p)}${isMe?' <span style="font-size:10px;color:var(--accent);">· vos</span>':''}</div>
           <div class="rank-stats">${p.games} partido${p.games!==1?'s':''} apostados</div>
         </div>
         ${isMvp ? '<span class="mvp-badge">🏅 MVP</span>' : ''}
@@ -2125,7 +2132,7 @@ function renderRanking(con) {
   // Vista General
   let mvpCardHTML = '';
   if (lastMvp) {
-    const winnerNames = lastMvp.winners.map(w => w.name).join(' & ');
+    const winnerNames = lastMvp.winners.map(w => displayName(w)).join(' & ');
     const isTie       = lastMvp.winners.length > 1;
     const isMe        = lastMvp.winners.some(w => w.id === currentPlayer.id);
     mvpCardHTML = `<div class="mvp-card">
@@ -2151,12 +2158,12 @@ function renderRanking(con) {
     const ci   = scores.length>=2 ? i : 0;
     const ptsC = pColors[ci] || 'var(--text)';
     podHTML += `<div class="podium-col">
-      <div class="podium-ava" style="background:${c.bg};color:${c.tc};border:2px solid ${ptsC};">${initials(p.name)}</div>
+      <div class="podium-ava" style="background:${c.bg};color:${c.tc};border:2px solid ${ptsC};">${initials(displayName(p))}</div>
       <div class="podium-block ${pbClass[ci]||'pb1'}">
         <span style="font-size:${ci===1?'22':'16'}px;margin-bottom:2px;">${medals[ci]}</span>
         <span class="podium-pts" style="color:${ptsC};">${p.pts}</span>
       </div>
-      <div class="podium-name">${p.name}</div>
+      <div class="podium-name">${displayName(p)}</div>
     </div>`;
   });
   podHTML += '</div>';
@@ -2188,7 +2195,7 @@ function renderRanking(con) {
       <span class="rank-num" style="color:${i<3?goldColors[i]:'var(--text-d)'};">${curRank}</span>
       ${avaEl(p,36)}
       <div class="rank-info">
-        <div class="rank-name">${p.name}${isMe?' <span style="font-size:10px;color:var(--accent);">· vos</span>':''}</div>
+        <div class="rank-name">${displayName(p)}${isMe?' <span style="font-size:10px;color:var(--accent);">· vos</span>':''}</div>
         <div class="rank-stats">🎯 ${p.exact} exactos &nbsp;✓ ${p.partial} parciales</div>
         ${achLine}
       </div>
@@ -2390,9 +2397,9 @@ function renderPerfil(con) {
 
   let html=`<div class="profile-header">
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px;">
-      <div class="ava" style="width:56px;height:56px;background:${c.bg};color:${c.tc};font-size:20px;border:2px solid var(--accent);">${initials(currentPlayer.name)}</div>
+      <div class="ava" style="width:56px;height:56px;background:${c.bg};color:${c.tc};font-size:20px;border:2px solid var(--accent);">${initials(displayName(currentPlayer))}</div>
       <div style="text-align:left;">
-        <div style="font-family:var(--fd);font-size:22px;font-weight:800;">${currentPlayer.name}</div>
+        <div style="font-family:var(--fd);font-size:22px;font-weight:800;">${displayName(currentPlayer)}</div>
         <div class="profile-rank-badge">${rankLabel} del ranking</div>
       </div>
     </div>
@@ -2411,6 +2418,20 @@ function renderPerfil(con) {
     const d=myPreds.filter(p=>p.homeScore===p.awayScore).length;
     const a=myPreds.filter(p=>p.homeScore<p.awayScore).length;
     const tot=myPreds.length||1;
+
+    // Card editor del nombre de participante (lo que ven todos los demás)
+    html+=`<div class="card" style="margin-bottom:10px;">
+      <div style="font-size:12px;color:var(--text-m);margin-bottom:8px;">👤 Tu nombre como te ven los demás</div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="display-name-input" maxlength="20" placeholder="Ej: Diego C." value="${escapeHtml(currentPlayer.displayName || '')}" style="flex:1;">
+        <button class="btn btn-primary" id="btn-save-display-name" style="padding:10px 14px;">Guardar</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-d);margin-top:6px;">
+        Usuario para entrar: <strong style="color:var(--text-m);">${escapeHtml(currentPlayer.name)}</strong>
+        ${(!currentPlayer.displayName || !currentPlayer.displayName.trim()) ? ' · sin nombre de participante (se usa el usuario)' : ''}
+      </div>
+    </div>`;
+
     html+=`<div class="stats-grid">
       <div class="stat-card"><div class="stat-val" style="color:var(--accent);">${sc.exact||0}</div><div class="stat-lbl">🎯 Exactos</div></div>
       <div class="stat-card"><div class="stat-val" style="color:var(--gold);">${sc.partial||0}</div><div class="stat-lbl">✓ Parciales</div></div>
@@ -2537,6 +2558,29 @@ function renderPerfil(con) {
 function darseDeBaja() {
   document.getElementById('baja-btn').style.display='none';
   document.getElementById('baja-confirm').style.display='block';
+}
+
+// Guardar nombre de participante (displayName) del jugador actual.
+function saveDisplayName() {
+  const input = document.getElementById('display-name-input');
+  if (!input) return;
+  const val = input.value.trim();
+  const players = DB.getPlayers();
+  const me = players.find(p => p.id === currentPlayer.id);
+  if (!me) { toast('No se encontró tu usuario','err'); return; }
+  if (val) me.displayName = val;
+  else delete me.displayName;
+  // Actualizar el currentPlayer en memoria y en sessionStorage para mantener consistencia
+  currentPlayer.displayName = me.displayName;
+  sessionStorage.setItem('wc26_cp', JSON.stringify(currentPlayer));
+  savePlayersMerged(players);
+  toast(val ? `Nombre actualizado: ${val} ✓` : 'Nombre de participante removido', 'ok');
+  // Re-render del header y la vista
+  const nameEl = document.getElementById('header-name');
+  if (nameEl) nameEl.textContent = displayName(currentPlayer);
+  const av = document.getElementById('header-ava');
+  if (av) av.textContent = initials(displayName(currentPlayer));
+  renderView(currentView);
 }
 
 function confirmarBaja() {
@@ -2677,7 +2721,7 @@ function renderAdmin(con) {
                    <input type="checkbox" class="tabla-player-cb" data-player-id="${p.id}"
                           ${editingTabla?.playerIds?.includes(p.id) ? 'checked' : ''}
                           style="width:16px;height:16px;accent-color:var(--accent);">
-                   ${p.name}
+                   ${displayName(p)}
                  </label>
                `).join('')}
              </div>`}
@@ -2727,13 +2771,13 @@ function renderAdmin(con) {
           : DB.getPlayers().map(p => {
               const c = color(p.colorIdx);
               return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:.5px solid var(--border);">
-                <div class="ava" style="width:32px;height:32px;background:${c.bg};color:${c.tc};font-size:11px;flex-shrink:0;">${initials(p.name)}</div>
+                <div class="ava" style="width:32px;height:32px;background:${c.bg};color:${c.tc};font-size:11px;flex-shrink:0;">${initials(displayName(p))}</div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:13px;font-weight:500;">${p.name}</div>
+                  <div style="font-size:13px;font-weight:500;">${displayName(p)}${p.displayName && p.displayName.trim() && p.displayName.trim() !== p.name ? ` <span style="font-size:10px;color:var(--text-d);font-weight:400;">(${escapeHtml(p.name)})</span>` : ''}</div>
                   <div style="font-size:11px;color:var(--text-d);">PIN: ${p.pinHash ? '••••' : 'sin PIN'}</div>
                 </div>
-                <button class="btn btn-secondary btn-admin-reset-pin" data-player-id="${p.id}" data-player-name="${p.name}" style="padding:5px 10px;font-size:11px;">🔑 Reset PIN</button>
-                <button class="btn btn-danger btn-admin-delete-player" data-player-id="${p.id}" data-player-name="${p.name}" style="padding:5px 10px;font-size:11px;">✕</button>
+                <button class="btn btn-secondary btn-admin-reset-pin" data-player-id="${p.id}" data-player-name="${escapeHtml(displayName(p))}" style="padding:5px 10px;font-size:11px;">🔑 Reset PIN</button>
+                <button class="btn btn-danger btn-admin-delete-player" data-player-id="${p.id}" data-player-name="${escapeHtml(displayName(p))}" style="padding:5px 10px;font-size:11px;">✕</button>
               </div>`;
             }).join('')}
       </div>
@@ -3308,6 +3352,18 @@ function bindPerfilEvents() {
     btnCancel.onclick = function() {
       document.getElementById('baja-confirm').style.display = 'none';
       document.getElementById('baja-btn').style.display = 'block';
+    };
+  }
+
+  // Guardar displayName
+  const btnSaveDisplay = document.getElementById('btn-save-display-name');
+  if (btnSaveDisplay) btnSaveDisplay.onclick = saveDisplayName;
+
+  // Permitir guardar con Enter en el input
+  const displayInput = document.getElementById('display-name-input');
+  if (displayInput) {
+    displayInput.onkeydown = function(e) {
+      if (e.key === 'Enter') saveDisplayName();
     };
   }
 }
