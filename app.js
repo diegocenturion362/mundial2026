@@ -461,14 +461,29 @@ function mapFifaStatus(m) {
 }
 
 function mapPhase(match) {
+  // CRITERIO PRIMARIO: usar MatchNumber. Los números del Mundial 2026 son fijos y predecibles,
+  // así evitamos que FIFA mande "Final Tournament" como StageName y matcheemos mal.
+  // 1-72: grupos · 73-88: 16vos · 89-96: 8vos · 97-100: cuartos · 101-102: semis · 103: 3ro · 104: final
+  const num = Number(match.MatchNumber);
+  if (Number.isInteger(num) && num > 0 && num <= 104) {
+    if (num <= 72)  return 'grupos';
+    if (num <= 88)  return 'r32';
+    if (num <= 96)  return 'r16';
+    if (num <= 100) return 'qf';
+    if (num <= 102) return 'sf';
+    if (num === 103) return 'third';
+    if (num === 104) return 'final';
+  }
+
+  // FALLBACK por texto si no hay MatchNumber válido.
   const g = localizedText(match.GroupName, '').toLowerCase();
   const s = (localizedText(match.StageName, '') || '').toLowerCase();
   if (g.includes('grupo') || g.includes('group') || s.includes('regular') || s.includes('temporada')) return 'grupos';
-  if (s.includes('32') || s.includes('treinta')) return 'r32';
-  if (s.includes('16') || s.includes('octavo') || s.includes('round of 16')) return 'r16';
+  if (s.includes('32') || s.includes('treinta') || s.includes('dieciseisavos') || s.includes('sixteenth')) return 'r32';
+  if (s.includes('octavo') || s.includes('round of 16') || s.includes('eighth')) return 'r16';
   if (s.includes('cuarto') || s.includes('quarter')) return 'qf';
   if (s.includes('semi')) return 'sf';
-  if (s.includes('tercer') || s.includes('third')) return 'third';
+  if (s.includes('tercer') || s.includes('third') || s.includes('3rd')) return 'third';
   if (s.includes('final')) return 'final';
   return 'grupos';
 }
