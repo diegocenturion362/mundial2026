@@ -519,28 +519,37 @@ async function loadFifaMatches({ silent = false } = {}) {
 
     if (!fresh.length) throw new Error('FIFA devolvió 0 partidos');
 
-    // SOBREESCRIBIR matches con el feed de FIFA (que ya viene filtrado por idCompetition=17).
-    // Esto descarta automáticamente cualquier partido basura que estuviera en cache.
-    // Preservamos: el resultado de partidos finalizados (FIFA puede tardar en actualizar)
-    // y cualquier override manual del admin sobre partidos del Mundial.
-    const freshById = new Map(fresh.map(m => [String(m.id), m]));
-    const preserved = [];
-    for (const old of matches) {
-      if (!old || !old.id) continue;
-      const id = String(old.id);
-      if (freshById.has(id)) {
-        // Si tenía manualOverride o estaba finished, mantenemos esos campos
-        if (old.manualOverride || (old.status === 'finished' && freshById.get(id).status !== 'finished')) {
-          freshById.set(id, { ...freshById.get(id), ...old });
+    // GUARDIA contra respuesta incompleta de FIFA: si llegan menos de 30 partidos
+    // y ya teníamos más en cache, asumimos que es un down parcial de FIFA.
+    // En ese caso usamos merge tradicional (preservamos todo, no descartamos nada).
+    // Si la respuesta es completa (>= 30), aplicamos la lógica nueva que descarta basura.
+    const FIFA_MIN_PARTIDOS = 30;
+    const respuestaCompleta = fresh.length >= FIFA_MIN_PARTIDOS;
+
+    if (!respuestaCompleta && matches.length > fresh.length) {
+      // Respuesta parcial de FIFA — preservar todo lo que ya teníamos.
+      console.warn(`[FIFA] Respuesta parcial detectada (${fresh.length} partidos). Preservando cache de ${matches.length}.`);
+      matches = mergeMatchesWithHistory(matches, fresh);
+    } else {
+      // Respuesta completa: SOBREESCRIBIR con el feed de FIFA y descartar basura.
+      // Preservamos: el marcador de partidos finalizados (FIFA puede tardar en actualizar)
+      // y cualquier override manual del admin sobre partidos del Mundial.
+      const freshById = new Map(fresh.map(m => [String(m.id), m]));
+      const preserved = [];
+      for (const old of matches) {
+        if (!old || !old.id) continue;
+        const id = String(old.id);
+        if (freshById.has(id)) {
+          if (old.manualOverride || (old.status === 'finished' && freshById.get(id).status !== 'finished')) {
+            freshById.set(id, { ...freshById.get(id), ...old });
+          }
+        } else if (old.manualOverride) {
+          preserved.push(old);
         }
-      } else if (old.manualOverride) {
-        // Override manual de un partido que FIFA ya no devuelve: lo preservamos
-        preserved.push(old);
       }
-      // Cualquier otro partido viejo que no esté en fresh: SE DESCARTA (basura)
+      matches = [...Array.from(freshById.values()), ...preserved]
+        .sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
     }
-    matches = [...Array.from(freshById.values()), ...preserved]
-      .sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
     saveCachedMatches(matches);
 
     const newlyFinished = matches.filter(m => m.status === 'finished' && !prevFinished.has(m.id));
