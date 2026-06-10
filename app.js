@@ -363,6 +363,15 @@ async function initFirebase() {
   const db = firebase.database();
   _fbDatabase = db;
 
+  // Autenticación anónima: necesaria para las reglas "auth != null".
+  // Debe completarse ANTES de cualquier lectura/escritura, o Firebase las rechaza.
+  // Si falla, seguimos igual (la app caerá al modo caché local en el catch de abajo).
+  try {
+    if (firebase.auth) await firebase.auth().signInAnonymously();
+  } catch (e) {
+    console.warn('Auth anónima falló (la app seguirá en modo local si no hay sesión):', e.message);
+  }
+
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Firebase timeout (8s)')), 8000)
   );
