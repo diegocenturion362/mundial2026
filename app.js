@@ -1023,6 +1023,7 @@ let predSortMode    = 'fase';   // 'fecha' | 'grupo' | 'fase'
 let apuestasSortMode = 'fecha'; // 'fecha' | 'grupo' | 'fase'
 let predSortFilter  = 'all';    // sub-filtro activo en Pronósticos
 let apuestasFilter  = 'all';    // sub-filtro activo en Mis Apuestas
+let predictionsViewMode = 'upcoming'; // 'upcoming' | 'finished' — toggle Pronósticos / Resultados
 let adminAuth     = false;
 
 function renderLoginScreen() {
@@ -1242,13 +1243,23 @@ function renderPredictions(con) {
   const wcs    = DB.getWildcards();
   const myWC   = wcs[currentPlayer.id] || {};
   const special = DB.getSpecial().find(s => s.playerId === currentPlayer.id);
+  const viewMode = predictionsViewMode; // 'upcoming' | 'finished'
+
+  const finishedCount = matches.filter(m => m.status === 'finished').length;
+  const upcomingCount = matches.filter(m => m.status !== 'finished').length;
 
   let html = `<div class="fifa-strip">
     <span class="fifa-source">${fifaSource}</span>
     <button class="fifa-refresh-btn btn" id="btn-fifa-refresh">↻ Actualizar</button>
   </div>`;
 
-  html += reglHtml;
+  // Toggle Por jugar / Finalizados — acceso directo a la vista de resultados con apuestas y desglose.
+  html += `<div style="display:flex;gap:6px;margin-bottom:12px;">
+    <button class="btn ${viewMode==='upcoming'?'btn-primary':'btn-secondary'} btn-mode-pred" data-mode="upcoming" style="flex:1;">⚽ Por jugar${upcomingCount?` (${upcomingCount})`:''}</button>
+    <button class="btn ${viewMode==='finished'?'btn-primary':'btn-secondary'} btn-mode-pred" data-mode="finished" style="flex:1;">🏁 Finalizados${finishedCount?` (${finishedCount})`:''}</button>
+  </div>`;
+
+  if (viewMode === 'upcoming') html += reglHtml;
 
   if (!matches.length) {
     html += `<div class="empty"><div class="empty-icon">📶</div>
@@ -1288,20 +1299,22 @@ function renderPredictions(con) {
     </div>`;
   };
 
-  html += `<div class="special-card">
-    <div class="sp-header">
-      <div class="sp-icon">🏆</div>
-      <div>
-        <div class="sp-title">Pronósticos Especiales</div>
-        <div class="sp-sub">Hasta 100 puntos en juego · ${spLocked ? '🔒 Cerrados al inicio' : 'Editables hasta el inicio'}</div>
+  if (viewMode === 'upcoming') {
+    html += `<div class="special-card">
+      <div class="sp-header">
+        <div class="sp-icon">🏆</div>
+        <div>
+          <div class="sp-title">Pronósticos Especiales</div>
+          <div class="sp-sub">Hasta 100 puntos en juego · ${spLocked ? '🔒 Cerrados al inicio' : 'Editables hasta el inicio'}</div>
+        </div>
       </div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      ${spRow('🥇 Campeón del Mundial <span style="color:var(--gold);">+50 pts</span>','sp-champ','País campeón',special?.champion,'champion')}
-      ${spRow('🥈 Subcampeón <span style="color:var(--gold);">+30 pts</span>','sp-sub','País subcampeón',special?.subCampeon,'subCampeon')}
-      ${spRow('🥉 Tercer puesto <span style="color:var(--gold);">+20 pts</span>','sp-third','País tercer puesto',special?.tercerPuesto,'tercerPuesto')}
-    </div>
-  </div>`;
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${spRow('🥇 Campeón del Mundial <span style="color:var(--gold);">+50 pts</span>','sp-champ','País campeón',special?.champion,'champion')}
+        ${spRow('🥈 Subcampeón <span style="color:var(--gold);">+30 pts</span>','sp-sub','País subcampeón',special?.subCampeon,'subCampeon')}
+        ${spRow('🥉 Tercer puesto <span style="color:var(--gold);">+20 pts</span>','sp-third','País tercer puesto',special?.tercerPuesto,'tercerPuesto')}
+      </div>
+    </div>`;
+  }
 
   const allSorted    = sortMatchesChronologically(matches);
   const upcoming     = allSorted.filter(m => m.status !== 'finished');
@@ -1451,17 +1464,24 @@ function renderPredictions(con) {
           </div>
         </div>
         ${!closed ? renderTrends(m.id) : ''}
-        ${canSeeBets(m) ? renderBetsPanel(m) : ''}
+        ${canSeeBets(m) ? renderBetsPanel(m, viewMode === 'finished') : ''}
       </div>`;
   };
 
-  if (predSortMode === 'fecha') {
-    for (const m of filteredUpcoming) {
+  // Elegir qué lista de partidos mostrar según el modo activo (Por jugar vs Finalizados).
+  const matchesToShow = viewMode === 'finished' ? filteredFinished : filteredUpcoming;
+
+  if (matchesToShow.length === 0) {
+    html += `<div class="empty"><div class="empty-icon">${viewMode==='finished'?'🏁':'⚽'}</div>
+      <p>${viewMode==='finished'?'Aún no hay partidos finalizados con este filtro.':'No hay partidos por jugar con este filtro.'}</p>
+    </div>`;
+  } else if (predSortMode === 'fecha') {
+    for (const m of matchesToShow) {
       html += cardHTML(m, _predictionIndex.get(`${currentPlayer.id}::${m.id}`));
     }
   } else if (predSortMode === 'grupo') {
     const byKey = {}, keyOrder = [];
-    for (const m of filteredUpcoming) {
+    for (const m of matchesToShow) {
       const key = m.group && m.group !== '?' ? m.group : (m.phase||'?');
       if (!byKey[key]) { byKey[key]=[]; keyOrder.push(key); }
       byKey[key].push(m);
@@ -1480,7 +1500,7 @@ function renderPredictions(con) {
     }
   } else {
     const byPhase = {};
-    for (const m of filteredUpcoming) {
+    for (const m of matchesToShow) {
       (byPhase[m.phase] = byPhase[m.phase] || []).push(m);
     }
     const order = Object.keys(PHASES);
@@ -1490,14 +1510,6 @@ function renderPredictions(con) {
         html += cardHTML(m, _predictionIndex.get(`${currentPlayer.id}::${m.id}`));
       }
     });
-  }
-
-  // Resultados pasados
-  if (filteredFinished.length > 0) {
-    html += '<div class="sec-title">Resultados finalizados</div>';
-    for (const m of filteredFinished) {
-      html += cardHTML(m, _predictionIndex.get(`${currentPlayer.id}::${m.id}`));
-    }
   }
 
   con.innerHTML = html;
@@ -1645,7 +1657,7 @@ function renderTrends(matchId) {
 }
 
 // ── APUESTAS Y COMENTARIOS DE UN PARTIDO (ACORDEÓN) ──
-function renderBetsPanel(m) {
+function renderBetsPanel(m, openByDefault = false) {
   const isLive = m.status === 'live';
   const label  = isLive ? '⏱ Apuestas en vivo' : m.status === 'finished' ? '✅ Apuestas finales' : '🔒 Apuestas (Cerrado)';
   const wcData = DB.getWildcards();
@@ -1696,11 +1708,12 @@ function renderBetsPanel(m) {
     </div>`;
   }
 
-  return `<div class="bets-toggle" id="bt-${m.id}" data-match-id="${m.id}">
+  const openClass = openByDefault ? ' open' : '';
+  return `<div class="bets-toggle${openClass}" id="bt-${m.id}" data-match-id="${m.id}">
       <span>${label}</span>
       <span class="toggle-icon">▼</span>
     </div>
-    <div class="bets-panel" id="bp-${m.id}">
+    <div class="bets-panel${openClass}" id="bp-${m.id}">
       ${rowsHTML}
       ${renderChatPanel(m.id)}
     </div>`;
@@ -3205,6 +3218,16 @@ function bindPredictionsEvents() {
   // Botón FIFA refresh
   const refreshBtn = document.getElementById('btn-fifa-refresh');
   if (refreshBtn) refreshBtn.onclick = () => loadFifaMatches();
+
+  // Toggle entre vista "Por jugar" y "Finalizados"
+  document.querySelectorAll('.btn-mode-pred').forEach(btn => {
+    btn.onclick = function() {
+      predictionsViewMode = this.dataset.mode;
+      // Resetear el sub-filtro porque las fases pueden cambiar entre los dos modos
+      predSortFilter = 'all';
+      renderView('predictions');
+    };
+  });
 
   // Guardado de especiales
   document.querySelectorAll('.btn-sp-save').forEach(btn => {
