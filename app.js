@@ -1270,23 +1270,25 @@ function renderPredictions(con) {
       return `<div>
         <div class="form-label">${label}</div>
         <div style="display:flex;gap:8px;">
-          <input type="text" style="flex:1;" value="${val}" disabled>
+          <input type="text" style="flex:1;" value="${escapeHtml(val)}" disabled>
           <span style="padding:10px;font-size:18px;">${val ? '🔒' : '–'}</span>
         </div>
       </div>`;
     }
+    // Select desplegable con todos los equipos del Mundial. Evita errores de tipeo
+    // (ej. "Parsguay" vs "Paraguay") porque el usuario solo puede elegir de la lista oficial.
+    const options = `<option value="" ${!val ? 'selected' : ''}>${placeholder}</option>` +
+      allTeams.map(t => `<option value="${escapeHtml(t)}"${t === val ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
     return `<div>
       <div class="form-label">${label}</div>
       <div style="display:flex;gap:8px;">
-        <input type="text" id="${id}" placeholder="${placeholder}" style="flex:1;" value="${val}" list="sp-teams">
+        <select id="${id}" style="flex:1;">${options}</select>
         <button class="btn btn-gold btn-sp-save" data-sp-type="${type}" data-input-id="${id}" style="padding:10px 14px;">${val ? 'Actualizar' : 'Guardar'}</button>
       </div>
     </div>`;
   };
-  
-  const teamsDatalist = `<datalist id="sp-teams">${allTeams.map(t => `<option value="${t}">`).join('')}</datalist>`;
-  
-  html += `${teamsDatalist}<div class="special-card">
+
+  html += `<div class="special-card">
     <div class="sp-header">
       <div class="sp-icon">🏆</div>
       <div>
