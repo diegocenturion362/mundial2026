@@ -637,7 +637,9 @@ const PLAYOFF_PHASES = new Set(['r32','r16','qf','sf','third','final']);
 const WC_QUOTA    = { grupos:1, r32:2, r16:1, qf:1, sf:0, third:0, final:0 };
 const PHASE_MULT  = { grupos:1, r32:2, r16:3, qf:4, sf:5, third:5, final:7 };
 const PEN_BONUS_PTS = { r32:2, r16:4, qf:6, sf:8, third:10, final:12 };
-const MUNDIAL_START = new Date('2026-06-11T00:00:00-03:00');
+// Fecha de cierre de los pronósticos especiales (campeón, subcampeón, tercer puesto).
+// Hoy 11 jun están abiertos; se cierran el viernes 12 jun a las 00:00 hora Paraguay.
+const MUNDIAL_START = new Date('2026-06-12T00:00:00-03:00');
 
 const ACHIEVEMENTS = [
   {id:'first_exact', icon:'🎯', title:'Francotirador',   desc:'Primer resultado exacto',              check:(s,r)=>s.exact>=1},
@@ -944,6 +946,17 @@ function fmtDate(d) {
       hour:'2-digit', minute:'2-digit', hour12: false
     }).format(new Date(d));
   } catch { return d || ''; }
+}
+
+// Devuelve la fecha en formato YYYY-MM-DD usando zona horaria Paraguay.
+// Esto evita que un partido que en UTC cae al día siguiente quede fuera del filtro por fecha local.
+function localDateKey(d) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Asuncion',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date(d));
+  } catch { return ''; }
 }
 
 function toast(msg, type='') {
@@ -1325,10 +1338,10 @@ function renderPredictions(con) {
       const seen = new Set();
       for (const m of allSorted) {
         const d = new Date(m.kickoff||m.date);
-        const key = d.toISOString().slice(0,10);
+        const key = localDateKey(d);
         if (!seen.has(key)) {
           seen.add(key);
-          const lbl = new Intl.DateTimeFormat('es-PY',{weekday:'short',day:'2-digit',month:'short'}).format(d);
+          const lbl = new Intl.DateTimeFormat('es-PY',{timeZone:'America/Asuncion',weekday:'short',day:'2-digit',month:'short'}).format(d);
           selHtml += `<option value="${key}"${predSortFilter===key?' selected':''}>${lbl}</option>`;
         }
       }
@@ -1349,7 +1362,7 @@ function renderPredictions(con) {
     const filterFn = m => {
       if (predSortMode === 'fase') return m.phase === predSortFilter;
       if (predSortMode === 'grupo') return (m.group&&m.group!=='?'?m.group:(m.phase||'?')) === predSortFilter;
-      if (predSortMode === 'fecha') return new Date(m.kickoff||m.date).toISOString().slice(0,10) === predSortFilter;
+      if (predSortMode === 'fecha') return localDateKey(new Date(m.kickoff||m.date)) === predSortFilter;
       return true;
     };
     filteredUpcoming = upcoming.filter(filterFn);
@@ -1883,10 +1896,10 @@ function renderMisApuestas(con) {
       const seen=new Set();
       for(const m of allM){
         const d=new Date(m.kickoff||m.date);
-        const key=d.toISOString().slice(0,10);
+        const key=localDateKey(d);
         if(!seen.has(key)){
           seen.add(key);
-          const lbl=new Intl.DateTimeFormat('es-PY',{weekday:'short',day:'2-digit',month:'short'}).format(d);
+          const lbl=new Intl.DateTimeFormat('es-PY',{timeZone:'America/Asuncion',weekday:'short',day:'2-digit',month:'short'}).format(d);
           selHtml+=`<option value="${key}"${apuestasFilter===key?' selected':''}>${lbl}</option>`;
         }
       }
@@ -1906,7 +1919,7 @@ function renderMisApuestas(con) {
     filteredM=allM.filter(m=>{
       if(apuestasSortMode==='fase') return m.phase===apuestasFilter;
       if(apuestasSortMode==='grupo') return (m.group&&m.group!=='?'?m.group:(m.phase||'?'))===apuestasFilter;
-      if(apuestasSortMode==='fecha') return new Date(m.kickoff||m.date).toISOString().slice(0,10)===apuestasFilter;
+      if(apuestasSortMode==='fecha') return localDateKey(new Date(m.kickoff||m.date))===apuestasFilter;
       return true;
     });
   }
