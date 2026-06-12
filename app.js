@@ -1673,7 +1673,9 @@ function renderBetsPanel(m, openByDefault = false) {
     const isMe  = pl.id === currentPlayer.id;
     const isWC  = isWCUsed(wcData[pl.id] || {}, m);
     const res   = betResult(pred, m.homeScore, m.awayScore);
-    const pp    = provPtsForMatch(pl.id, m.id);
+    // Para partidos finalizados usar ptsEarnedInMatch (incluye bonus riesgo).
+    // Para partidos en vivo usar provPtsForMatch (sin riesgo porque aún no es definitivo).
+    const pp    = m.status === 'finished' ? ptsEarnedInMatch(pl.id, m.id) : provPtsForMatch(pl.id, m.id);
     const risk  = m.status === 'finished' && calcPtsBase(pred, m.homeScore, m.awayScore) > 0 ? calcRiskBonus(pred, m.homeScore, m.awayScore, m.id) : 0;
     const isExact = res === 'exact';
     const isPart  = res === 'partial';
