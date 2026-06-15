@@ -1101,26 +1101,29 @@ function loginWithPin() {
   const players = DB.getPlayers();
   const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
 
-  if (existing) {
-    if (!existing.pinHash) {
-      existing.pinHash = pinHash;
-      savePlayersMerged(players);
-      const rem = document.getElementById('ln-remember')?.checked;
-      doLogin(existing, rem);
-    } else if (existing.pinHash === pinHash) {
-      const rem = document.getElementById('ln-remember')?.checked;
-      doLogin(existing, rem);
-    } else {
-      toast('PIN incorrecto 🔒','err');
-    }
-  } else {
-    const np = { id:genId(), name, colorIdx:players.length, pinHash, joinedAt:Date.now() };
-    players.push(np);
-    savePlayersMerged(players);
-    toast('¡Bienvenido/a ' + name + '! 🎉','ok');
-    const rem = document.getElementById('ln-remember')?.checked;
-    doLogin(np, rem);
+  // El registro está cerrado durante el Mundial. Si el nombre no existe o el PIN no coincide,
+  // mostramos el mismo mensaje genérico para no revelar qué usuarios están registrados.
+  if (!existing) {
+    toast('Nombre de usuario o PIN incorrecto 🔒', 'err');
+    return;
   }
+
+  if (!existing.pinHash) {
+    // Primer login del jugador existente: le asignamos su PIN.
+    existing.pinHash = pinHash;
+    savePlayersMerged(players);
+    const rem = document.getElementById('ln-remember')?.checked;
+    doLogin(existing, rem);
+    return;
+  }
+
+  if (existing.pinHash === pinHash) {
+    const rem = document.getElementById('ln-remember')?.checked;
+    doLogin(existing, rem);
+    return;
+  }
+
+  toast('Nombre de usuario o PIN incorrecto 🔒', 'err');
 }
 
 function quickLogin(id) {
