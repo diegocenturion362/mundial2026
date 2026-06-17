@@ -647,7 +647,7 @@ const ACHIEVEMENTS = [
   {id:'exact10',     icon:'🔮', title:'Oráculo',         desc:'10 resultados exactos',                check:(s,r)=>s.exact>=10},
   {id:'streak3',     icon:'🔥', title:'En llamas',       desc:'3 aciertos seguidos',                  check:(s,r)=>s.maxStreak>=3},
   {id:'streak5',     icon:'⚡', title:'Imparable',       desc:'5 aciertos consecutivos',              check:(s,r)=>s.maxStreak>=5},
-  {id:'wc_win',      icon:'🎯', title:'Redoblona certera', desc:'Puntos dobles con una redoblona',      check:(s,r)=>s.wildcardWin},
+  {id:'wc_win',      icon:'🃏', title:'Redoblona certera', desc:'Puntos dobles con una redoblona',      check:(s,r)=>s.wildcardWin},
   {id:'top3',        icon:'🏆', title:'Top 3',           desc:'Estás en el podio',                    check:(s,r)=>r<=3&&r>0},
   {id:'leader',      icon:'👑', title:'Líder',           desc:'Llegaste al primer puesto',             check:(s,r)=>r===1},
   {id:'no_blank',    icon:'💪', title:'Comprometido',    desc:'Pronosticaste 10+ partidos',            check:(s,r)=>s.totalPreds>=10},
@@ -1429,6 +1429,12 @@ function renderPredictions(con) {
             <div class="team-name">${m.awayTeam}</div>
           </div>
         </div>
+        ${m.status === 'finished' && m.homeScore !== null ? `
+          <div style="margin-top:10px;padding:10px 12px;text-align:center;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid rgba(74,222,128,.25);">
+            <div style="font-size:10px;font-weight:600;color:var(--text-m);letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px;">✅ Resultado final</div>
+            <div style="font-size:30px;font-weight:800;color:var(--accent);font-family:var(--fd);letter-spacing:.06em;line-height:1.1;">${m.homeScore} – ${m.awayScore}</div>
+          </div>
+        ` : ''}
         ${(() => {
           if (!PLAYOFF_PHASES.has(m.phase)) return '';
           if (closed) {
@@ -1453,7 +1459,7 @@ function renderPredictions(con) {
             : quota > 0
               ? `<button class="wc-btn btn-toggle-wc ${isWC?'active':''}" id="wc-${m.id}" data-match-id="${m.id}" ${!canWC?'disabled':''}
                   title="${isWC?'Quitar redoblona':rem>0?'Usar redoblona (×2 pts)':'Ya usaste tu redoblona'}">
-                  🎯 ${isWC?'Redoblona ×2':'Redoblona'}
+                  🃏 ${isWC?'Redoblona ×2':'Redoblona'}
                 </button>`
               : ''}
           <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
@@ -1596,7 +1602,7 @@ function toggleWC(matchId) {
       if (!Array.isArray(wcData[m.phase])) wcData[m.phase]=[wcData[m.phase]];
       wcData[m.phase].push(matchId);
     }
-    toast('🎯 Redoblona activada — puntos ×2','ok');
+    toast('🃏 Redoblona activada — puntos ×2','ok');
   }
   wcs[currentPlayer.id] = wcData;
   DB.saveWildcards(wcs);
@@ -1702,7 +1708,7 @@ function renderBetsPanel(m, openByDefault = false) {
     rowsHTML += `<div class="bet-row ${isMe?'is-me':''}" style="${rowBg}">
       ${avaEl(pl, 26)}
       <span style="font-size:13px;flex:1;${isMe?'font-weight:600;':''}">${displayName(pl)}${isMe?' <span style="font-size:10px;color:var(--accent);">(vos)</span>':''}</span>
-      ${isWC?'<span class="bet-badge">🎯</span>':''}
+      ${isWC?'<span class="bet-badge">🃏</span>':''}
       ${risk>0?`<span class="risk-badge">🎲+${risk}</span>`:''}
       <div style="flex-shrink:0;min-width:38px;text-align:center;">
         <div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:.03em;">${pred.homeScore}-${pred.awayScore}</div>
@@ -1745,7 +1751,7 @@ function betResult(pred, hScore, aScore) {
 function ptsLabel(pts, res, isWC) {
   if (pts===null) return '–';
   if (pts===0) return res==='wrong'?'✗ 0':'–';
-  return (isWC?'🎯 ':'')+'+'+pts+' pts';
+  return (isWC?'🃏 ':'')+'+'+pts+' pts';
 }
 
 function canSeeBets(m) {
@@ -1990,7 +1996,7 @@ function renderMisApuestas(con) {
         <div style="font-size:16px;flex-shrink:0;width:20px;text-align:center;">${statusIcon}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-            ${m.homeTeam} vs ${m.awayTeam}${isWC?' 🎯':''}
+            ${m.homeTeam} vs ${m.awayTeam}${isWC?' 🃏':''}
           </div>
           <div style="font-size:11px;color:var(--text-m);">${(PHASES[m.phase]||m.phase)}${m.group?' · Gr.'+m.group:''}
             ${isLive?`<span class="live-badge"><span class="live-dot"></span>${m.homeScore!==null?m.homeScore+'-'+m.awayScore+' · ':''}${m.liveDetail==='Descanso'?'Descanso':m.liveMinute?m.liveMinute+"'":'En vivo'}</span>`:''}
@@ -2533,7 +2539,7 @@ function renderPerfil(con) {
       html+=`<div class="hist-row">
         <div class="hist-match">
           <div class="hist-teams">${m.homeTeam} vs ${m.awayTeam}</div>
-          <div class="hist-meta">${(PHASES[m.phase]||m.phase)} · ${m.homeScore}-${m.awayScore}${isWC?' 🎯':''}${risk>0?` <span class="risk-badge">🎲 +${risk}</span>`:''}</div>
+          <div class="hist-meta">${(PHASES[m.phase]||m.phase)} · ${m.homeScore}-${m.awayScore}${isWC?' 🃏':''}${risk>0?` <span class="risk-badge">🎲 +${risk}</span>`:''}</div>
         </div>
         <div class="hist-pred" style="color:${p?'var(--text)':'var(--text-d)'};">${p?`${p.homeScore}-${p.awayScore}`:'–'}</div>
         <div class="hist-pts bet-pts ${ptsCls}">${p?`+${total}`:'–'}</div>
@@ -3134,7 +3140,7 @@ function reglamentoHTML() {
       <tr><td>🎯 Resultado exacto</td><td>5 pts base</td></tr>
       <tr><td>✓ Ganador / empate correcto</td><td>3 pts base</td></tr>
       <tr><td>+ Diferencia de goles exacta</td><td>+1 pt adicional</td></tr>
-      <tr><td>🎯 Redoblona</td><td>× 2 todos los puntos del partido</td></tr>
+      <tr><td>🃏 Redoblona</td><td>× 2 todos los puntos del partido</td></tr>
       <tr><td>⚽ Penales (playoffs)</td><td>+2 a +12 pts según fase</td></tr>
       <tr><td>🦁 El Valiente (único acierto)</td><td>× 2 todos los puntos</td></tr>
     </table>
@@ -3152,14 +3158,14 @@ function getRulesContent(tab) {
         <tr><td class="pts-val">5</td><td><div class="pts-desc"><strong>Resultado exacto</strong></div><div class="pts-sub">Marcador preciso · ej: apuestas 2-1 y sale 2-1</div></td></tr>
         <tr><td class="pts-val">3</td><td><div class="pts-desc"><strong>Ganador o empate correcto</strong></div><div class="pts-sub">Acertas ganador o empate, con marcador distinto</div></td></tr>
         <tr><td class="pts-val" style="color:var(--gold);">+1</td><td><div class="pts-desc"><strong>Bonus: diferencia de goles</strong></div><div class="pts-sub">Acertas ganador Y diferencia exacta · ej: apuestas 3-1 y sale 2-0</div></td></tr>
-        <tr><td class="pts-val" style="color:var(--gold);">×2</td><td><div class="pts-desc"><strong>🎯 Redoblona activada</strong></div><div class="pts-sub">Duplica todos los puntos de ese partido. Si haces 0, no cambia nada.</div></td></tr>
+        <tr><td class="pts-val" style="color:var(--gold);">×2</td><td><div class="pts-desc"><strong>🃏 Redoblona activada</strong></div><div class="pts-sub">Duplica todos los puntos de ese partido. Si haces 0, no cambia nada.</div></td></tr>
       </table>
     </div>`;
   if (tab === 'comodines') return `
     <div class="rules-section">
       <div class="rules-section-title">¿Qué es la redoblona?</div>
       <p style="font-size:13px;color:var(--text-m);line-height:1.6;margin-bottom:12px;">
-        La redoblona 🎯 duplica todos los puntos que ganes en ese partido.
+        La redoblona 🃏 duplica todos los puntos que ganes en ese partido.
       </p>
       <p style="font-size:12px;color:var(--text-m);line-height:1.5;padding:10px 12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border-md);">
         ⚠️ La redoblona se asigna antes del inicio del partido.

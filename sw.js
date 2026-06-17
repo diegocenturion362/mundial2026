@@ -1,5 +1,5 @@
 // ALBIPOLLA Service Worker (Versión Optimizada)
-const CACHE_NAME = 'albipolla-opt-v14';
+const CACHE_NAME = 'albipolla-opt-v15';
 
 const PRECACHE = [
   '/mundial2026/',
