@@ -463,7 +463,16 @@ function mapFifaStatus(m) {
   const hasScore = Number.isInteger(m.HomeTeamScore) && Number.isInteger(m.AwayTeamScore);
   const matchTime = String(m.MatchTime || '').trim();
 
-  if ([11,12,13].includes(statusCode) || (statusCode === 0 && hasScore)) return 'finished';
+  // SANITY CHECK: si el kickoff es a futuro, el partido NUNCA puede estar live ni finished.
+  // FIFA a veces manda MatchStatus=0 con HomeTeamScore=0/AwayTeamScore=0 como default antes de empezar,
+  // y sin este check los marcaríamos erróneamente como finalizados 0-0.
+  const kickoffDate = new Date(m.Date || 0);
+  if (!isNaN(kickoffDate.getTime()) && kickoffDate.getTime() > Date.now()) {
+    return 'pending';
+  }
+
+  // Solo códigos 11/12/13 = finished (post-match oficial). NO statusCode=0.
+  if ([11,12,13].includes(statusCode)) return 'finished';
   if ([3,4,5,6,9,10].includes(statusCode)) return 'live';
   if (hasScore && matchTime && matchTime !== "0'") return 'live';
   return 'pending';
@@ -556,15 +565,16 @@ async function loadFifaMatches({ silent = false } = {}) {
       matches = mergeMatchesWithHistory(matches, fresh);
     } else {
       // Respuesta completa: SOBREESCRIBIR con el feed de FIFA y descartar basura.
-      // Preservamos: el marcador de partidos finalizados (FIFA puede tardar en actualizar)
-      // y cualquier override manual del admin sobre partidos del Mundial.
+      // SOLO preservamos overrides manuales del admin. NO conservamos status='finished'
+      // viejo aunque FIFA diga otra cosa — si FIFA dice pending o live, le hacemos caso
+      // (esto arregla el bug de partidos falsos finalizados que se quedaban "pegados").
       const freshById = new Map(fresh.map(m => [String(m.id), m]));
       const preserved = [];
       for (const old of matches) {
         if (!old || !old.id) continue;
         const id = String(old.id);
         if (freshById.has(id)) {
-          if (old.manualOverride || (old.status === 'finished' && freshById.get(id).status !== 'finished')) {
+          if (old.manualOverride) {
             freshById.set(id, { ...freshById.get(id), ...old });
           }
         } else if (old.manualOverride) {
