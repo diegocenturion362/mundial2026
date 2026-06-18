@@ -325,8 +325,7 @@ function setupFirebaseListeners(db) {
   db.ref(FB_ROOT + '/' + MATCHES_FB_KEY).on('value', snap => {
     const raw = snap.val();
     if (!raw) return;
-    // Sanitización defensiva contra basura escrita por clientes con código viejo.
-    const val = sanitizeMatches(firebaseMatchesToArray(raw));
+    const val = firebaseMatchesToArray(raw);
     if (!val.length) return;
 
     const merged = mergeMatchesWithHistory(matches, val);
@@ -351,7 +350,7 @@ function loadCachedMatchesFromFirebase(callback) {
       .then(snap => {
         if (!snap) return callback([]);
         const val = snap.val();
-        const arr = sanitizeMatches(firebaseMatchesToArray(val));
+        const arr = firebaseMatchesToArray(val);
         callback(arr.length ? arr : []);
       }).catch(() => callback([]));
   } else {
@@ -411,39 +410,10 @@ let matches = [];
 let fifaLoading = false;
 let fifaSource  = 'Sin datos';
 
-// SANITIZACIÓN DEFENSIVA en 2 casos:
-// (A) Si el partido viene como 'finished' o 'live' pero su kickoff es a futuro → datos basura
-//     (cliente con código viejo o sync-fifa.js desactualizado). Lo arreglamos a 'pending'.
-// (B) Si el partido viene como 'live' pero pasaron más de 3h del kickoff → ya terminó
-//     (FIFA a veces sigue mandando matchTime activo). Lo arreglamos a 'finished'.
-// NO se tocan partidos con manualOverride (autoridad del admin).
-function sanitizeMatch(m) {
-  if (!m || m.manualOverride) return m;
-  const kickoffDate = new Date(m.kickoff || m.date || 0);
-  if (isNaN(kickoffDate.getTime())) return m;
-  const elapsed = Date.now() - kickoffDate.getTime();
-  const HOURS_3 = 3 * 60 * 60 * 1000;
-
-  // Caso A: futuro pero marcado terminado/en juego.
-  if (elapsed < 0 && (m.status === 'finished' || m.status === 'live')) {
-    return { ...m, status: 'pending', homeScore: null, awayScore: null, liveMinute: null, liveDetail: '' };
-  }
-
-  // Caso B: marcado live pero ya pasó suficiente tiempo para haber terminado.
-  if (elapsed > HOURS_3 && m.status === 'live') {
-    return { ...m, status: 'finished', liveMinute: null, liveDetail: '' };
-  }
-
-  return m;
-}
-function sanitizeMatches(arr) {
-  return Array.isArray(arr) ? arr.map(sanitizeMatch) : [];
-}
-
 function loadCachedMatches() {
   try {
     const d = JSON.parse(localStorage.getItem(MATCH_CACHE_KEY) || '[]');
-    return sanitizeMatches(Array.isArray(d) ? d : []);
+    return Array.isArray(d) ? d : [];
   } catch { return []; }
 }
 
@@ -492,32 +462,10 @@ function mapFifaStatus(m) {
   const statusCode = Number(m.MatchStatus);
   const hasScore = Number.isInteger(m.HomeTeamScore) && Number.isInteger(m.AwayTeamScore);
   const matchTime = String(m.MatchTime || '').trim();
-  const kickoffDate = new Date(m.Date || 0);
-  const kickoffValid = !isNaN(kickoffDate.getTime());
-  const now = Date.now();
-  const elapsed = kickoffValid ? now - kickoffDate.getTime() : null;
-  const HOURS_3 = 3 * 60 * 60 * 1000;
 
-  // SANITY CHECK 1: kickoff a futuro → pending (sin importar nada más).
-  if (kickoffValid && elapsed < 0) return 'pending';
-
-  // SANITY CHECK 2: si pasaron más de 3h desde el kickoff → es imposible que esté live.
-  // FIFA a veces sigue mandando matchTime="98'" para partidos ya terminados, esto evita
-  // que los marquemos como live para siempre.
-  if (kickoffValid && elapsed > HOURS_3 && hasScore) return 'finished';
-
-  // FIFA dice explícitamente finished/cancelled/postponed.
-  if ([11,12,13].includes(statusCode)) return 'finished';
-
-  // FIFA dice explícitamente live.
+  if ([11,12,13].includes(statusCode) || (statusCode === 0 && hasScore)) return 'finished';
   if ([3,4,5,6,9,10].includes(statusCode)) return 'live';
-
-  // Score + minuto en curso → live (solo si pasaron menos de 3h desde kickoff).
   if (hasScore && matchTime && matchTime !== "0'") return 'live';
-
-  // Score válido + arrancó hace poco → live.
-  if (hasScore && kickoffValid && elapsed >= 0) return 'live';
-
   return 'pending';
 }
 
@@ -608,23 +556,22 @@ async function loadFifaMatches({ silent = false } = {}) {
       matches = mergeMatchesWithHistory(matches, fresh);
     } else {
       // Respuesta completa: SOBREESCRIBIR con el feed de FIFA y descartar basura.
-      // SOLO preservamos overrides manuales del admin. NO conservamos status='finished'
-      // viejo aunque FIFA diga otra cosa — si FIFA dice pending o live, le hacemos caso
-      // (esto arregla el bug de partidos falsos finalizados que se quedaban "pegados").
+      // Preservamos: el marcador de partidos finalizados (FIFA puede tardar en actualizar)
+      // y cualquier override manual del admin sobre partidos del Mundial.
       const freshById = new Map(fresh.map(m => [String(m.id), m]));
       const preserved = [];
       for (const old of matches) {
         if (!old || !old.id) continue;
         const id = String(old.id);
         if (freshById.has(id)) {
-          if (old.manualOverride) {
+          if (old.manualOverride || (old.status === 'finished' && freshById.get(id).status !== 'finished')) {
             freshById.set(id, { ...freshById.get(id), ...old });
           }
         } else if (old.manualOverride) {
           preserved.push(old);
         }
       }
-      matches = sanitizeMatches([...Array.from(freshById.values()), ...preserved])
+      matches = [...Array.from(freshById.values()), ...preserved]
         .sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
     }
     saveCachedMatches(matches);
