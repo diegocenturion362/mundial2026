@@ -325,7 +325,8 @@ function setupFirebaseListeners(db) {
   db.ref(FB_ROOT + '/' + MATCHES_FB_KEY).on('value', snap => {
     const raw = snap.val();
     if (!raw) return;
-    const val = firebaseMatchesToArray(raw);
+    // Sanitización defensiva contra basura escrita por clientes con código viejo.
+    const val = sanitizeMatches(firebaseMatchesToArray(raw));
     if (!val.length) return;
 
     const merged = mergeMatchesWithHistory(matches, val);
@@ -350,7 +351,7 @@ function loadCachedMatchesFromFirebase(callback) {
       .then(snap => {
         if (!snap) return callback([]);
         const val = snap.val();
-        const arr = firebaseMatchesToArray(val);
+        const arr = sanitizeMatches(firebaseMatchesToArray(val));
         callback(arr.length ? arr : []);
       }).catch(() => callback([]));
   } else {
@@ -410,10 +411,27 @@ let matches = [];
 let fifaLoading = false;
 let fifaSource  = 'Sin datos';
 
+// SANITIZACIÓN DEFENSIVA: si el partido viene marcado como 'finished' o 'live' pero
+// su kickoff todavía está a futuro, son datos basura (probablemente escritos por un
+// cliente con código viejo o por el sync-fifa.js sin actualizar). Los arreglamos
+// en memoria antes de mostrar — NO modificamos lo que tiene manualOverride del admin.
+function sanitizeMatch(m) {
+  if (!m || m.manualOverride) return m;
+  const kickoffDate = new Date(m.kickoff || m.date || 0);
+  if (isNaN(kickoffDate.getTime())) return m;
+  if (kickoffDate.getTime() > Date.now() && (m.status === 'finished' || m.status === 'live')) {
+    return { ...m, status: 'pending', homeScore: null, awayScore: null, liveMinute: null, liveDetail: '' };
+  }
+  return m;
+}
+function sanitizeMatches(arr) {
+  return Array.isArray(arr) ? arr.map(sanitizeMatch) : [];
+}
+
 function loadCachedMatches() {
   try {
     const d = JSON.parse(localStorage.getItem(MATCH_CACHE_KEY) || '[]');
-    return Array.isArray(d) ? d : [];
+    return sanitizeMatches(Array.isArray(d) ? d : []);
   } catch { return []; }
 }
 
@@ -597,7 +615,7 @@ async function loadFifaMatches({ silent = false } = {}) {
           preserved.push(old);
         }
       }
-      matches = [...Array.from(freshById.values()), ...preserved]
+      matches = sanitizeMatches([...Array.from(freshById.values()), ...preserved])
         .sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
     }
     saveCachedMatches(matches);
