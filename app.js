@@ -462,19 +462,35 @@ function mapFifaStatus(m) {
   const statusCode = Number(m.MatchStatus);
   const hasScore = Number.isInteger(m.HomeTeamScore) && Number.isInteger(m.AwayTeamScore);
   const matchTime = String(m.MatchTime || '').trim();
-
-  // SANITY CHECK: si el kickoff es a futuro, el partido NUNCA puede estar live ni finished.
-  // FIFA a veces manda MatchStatus=0 con HomeTeamScore=0/AwayTeamScore=0 como default antes de empezar,
-  // y sin este check los marcaríamos erróneamente como finalizados 0-0.
   const kickoffDate = new Date(m.Date || 0);
-  if (!isNaN(kickoffDate.getTime()) && kickoffDate.getTime() > Date.now()) {
-    return 'pending';
+  const kickoffValid = !isNaN(kickoffDate.getTime());
+  const now = Date.now();
+
+  // SANITY CHECK: si el kickoff es a futuro, NUNCA puede estar live ni finished.
+  // FIFA manda MatchStatus=0 con score 0-0 como default antes de empezar y sin esto
+  // marcaríamos esos partidos como finalizados 0-0.
+  if (kickoffValid && kickoffDate.getTime() > now) return 'pending';
+
+  // FIFA dice explícitamente finished/cancelled/postponed.
+  if ([11,12,13].includes(statusCode)) return 'finished';
+
+  // FIFA dice explícitamente live.
+  if ([3,4,5,6,9,10].includes(statusCode)) return 'live';
+
+  // Score + minuto en curso → live.
+  if (hasScore && matchTime && matchTime !== "0'") return 'live';
+
+  // HEURÍSTICA por tiempo: un partido normal dura ~95-130 min con alargues.
+  // Si pasaron más de 3 horas desde el kickoff y hay score válido, ya terminó
+  // (FIFA a veces no actualiza MatchStatus a 11 inmediatamente al final).
+  if (hasScore && kickoffValid) {
+    const HOURS_3 = 3 * 60 * 60 * 1000;
+    const elapsed = now - kickoffDate.getTime();
+    if (elapsed > HOURS_3) return 'finished';
+    // Pasaron entre 0 y 3 horas: probablemente esté en juego con score.
+    if (elapsed >= 0) return 'live';
   }
 
-  // Solo códigos 11/12/13 = finished (post-match oficial). NO statusCode=0.
-  if ([11,12,13].includes(statusCode)) return 'finished';
-  if ([3,4,5,6,9,10].includes(statusCode)) return 'live';
-  if (hasScore && matchTime && matchTime !== "0'") return 'live';
   return 'pending';
 }
 
