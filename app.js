@@ -411,17 +411,29 @@ let matches = [];
 let fifaLoading = false;
 let fifaSource  = 'Sin datos';
 
-// SANITIZACIÓN DEFENSIVA: si el partido viene marcado como 'finished' o 'live' pero
-// su kickoff todavía está a futuro, son datos basura (probablemente escritos por un
-// cliente con código viejo o por el sync-fifa.js sin actualizar). Los arreglamos
-// en memoria antes de mostrar — NO modificamos lo que tiene manualOverride del admin.
+// SANITIZACIÓN DEFENSIVA en 2 casos:
+// (A) Si el partido viene como 'finished' o 'live' pero su kickoff es a futuro → datos basura
+//     (cliente con código viejo o sync-fifa.js desactualizado). Lo arreglamos a 'pending'.
+// (B) Si el partido viene como 'live' pero pasaron más de 3h del kickoff → ya terminó
+//     (FIFA a veces sigue mandando matchTime activo). Lo arreglamos a 'finished'.
+// NO se tocan partidos con manualOverride (autoridad del admin).
 function sanitizeMatch(m) {
   if (!m || m.manualOverride) return m;
   const kickoffDate = new Date(m.kickoff || m.date || 0);
   if (isNaN(kickoffDate.getTime())) return m;
-  if (kickoffDate.getTime() > Date.now() && (m.status === 'finished' || m.status === 'live')) {
+  const elapsed = Date.now() - kickoffDate.getTime();
+  const HOURS_3 = 3 * 60 * 60 * 1000;
+
+  // Caso A: futuro pero marcado terminado/en juego.
+  if (elapsed < 0 && (m.status === 'finished' || m.status === 'live')) {
     return { ...m, status: 'pending', homeScore: null, awayScore: null, liveMinute: null, liveDetail: '' };
   }
+
+  // Caso B: marcado live pero ya pasó suficiente tiempo para haber terminado.
+  if (elapsed > HOURS_3 && m.status === 'live') {
+    return { ...m, status: 'finished', liveMinute: null, liveDetail: '' };
+  }
+
   return m;
 }
 function sanitizeMatches(arr) {
@@ -483,11 +495,16 @@ function mapFifaStatus(m) {
   const kickoffDate = new Date(m.Date || 0);
   const kickoffValid = !isNaN(kickoffDate.getTime());
   const now = Date.now();
+  const elapsed = kickoffValid ? now - kickoffDate.getTime() : null;
+  const HOURS_3 = 3 * 60 * 60 * 1000;
 
-  // SANITY CHECK: si el kickoff es a futuro, NUNCA puede estar live ni finished.
-  // FIFA manda MatchStatus=0 con score 0-0 como default antes de empezar y sin esto
-  // marcaríamos esos partidos como finalizados 0-0.
-  if (kickoffValid && kickoffDate.getTime() > now) return 'pending';
+  // SANITY CHECK 1: kickoff a futuro → pending (sin importar nada más).
+  if (kickoffValid && elapsed < 0) return 'pending';
+
+  // SANITY CHECK 2: si pasaron más de 3h desde el kickoff → es imposible que esté live.
+  // FIFA a veces sigue mandando matchTime="98'" para partidos ya terminados, esto evita
+  // que los marquemos como live para siempre.
+  if (kickoffValid && elapsed > HOURS_3 && hasScore) return 'finished';
 
   // FIFA dice explícitamente finished/cancelled/postponed.
   if ([11,12,13].includes(statusCode)) return 'finished';
@@ -495,19 +512,11 @@ function mapFifaStatus(m) {
   // FIFA dice explícitamente live.
   if ([3,4,5,6,9,10].includes(statusCode)) return 'live';
 
-  // Score + minuto en curso → live.
+  // Score + minuto en curso → live (solo si pasaron menos de 3h desde kickoff).
   if (hasScore && matchTime && matchTime !== "0'") return 'live';
 
-  // HEURÍSTICA por tiempo: un partido normal dura ~95-130 min con alargues.
-  // Si pasaron más de 3 horas desde el kickoff y hay score válido, ya terminó
-  // (FIFA a veces no actualiza MatchStatus a 11 inmediatamente al final).
-  if (hasScore && kickoffValid) {
-    const HOURS_3 = 3 * 60 * 60 * 1000;
-    const elapsed = now - kickoffDate.getTime();
-    if (elapsed > HOURS_3) return 'finished';
-    // Pasaron entre 0 y 3 horas: probablemente esté en juego con score.
-    if (elapsed >= 0) return 'live';
-  }
+  // Score válido + arrancó hace poco → live.
+  if (hasScore && kickoffValid && elapsed >= 0) return 'live';
 
   return 'pending';
 }
