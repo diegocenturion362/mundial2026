@@ -122,12 +122,16 @@ function parsePredictions(raw) {
     }
     
     // Formato optimizado: { playerId: { matchId: { predObj } } }
+    // Ignoramos claves puramente numéricas: son restos del formato viejo (array). Si se
+    // mezclan con el formato nuevo, sus campos (id/homeScore/...) se leerían como matchIds
+    // y generarían predicciones basura. Un playerId real nunca es un entero puro.
     keys.forEach(playerId => {
+      if (/^\d+$/.test(playerId)) return;
       const playerPreds = raw[playerId];
       if (playerPreds && typeof playerPreds === 'object') {
         Object.keys(playerPreds).forEach(matchId => {
           const pred = playerPreds[matchId];
-          if (pred) {
+          if (pred && typeof pred === 'object') {
             arr.push({
               id: pred.id || `${playerId}::${matchId}`,
               playerId: playerId,
