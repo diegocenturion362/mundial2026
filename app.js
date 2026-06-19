@@ -417,8 +417,19 @@ function loadCachedMatches() {
   } catch { return []; }
 }
 
-function saveCachedMatches(arr) {
+// Guarda SOLO en localStorage (no toca Firebase). Se usa en los caminos AUTOMÁTICOS
+// (carga inicial y refresco FIFA del navegador) para que los 43 clientes NO escriban
+// el array completo al nodo compartido y se pisen entre sí. El único escritor
+// automático de partidos debe ser el script central sync-fifa.js.
+function saveCachedMatchesLocal(arr) {
   try { localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify(arr)); } catch(e) {}
+}
+
+// Guarda en localStorage Y en Firebase. Reservado para acciones del ADMIN
+// (override manual de resultados, revertir, importar, purgar) que sí deben
+// propagarse a todos los jugadores.
+function saveCachedMatches(arr) {
+  saveCachedMatchesLocal(arr);
   if (_fbDatabase && arr && arr.length) {
     _fbDatabase.ref(FB_ROOT + '/' + MATCHES_FB_KEY).set(arr).catch(() => {});
   }
@@ -436,7 +447,9 @@ function mergeMatchesWithHistory(existing, fresh) {
     const id = String(m.id);
     const cached = byId.get(id);
     if (!cached) { byId.set(id, m); continue; }
-    if (cached.manualOverride || (cached.status === 'finished' && m.status !== 'finished') || (cached.status === 'closed' && m.status === 'pending')) {
+    // No preservamos overrides LOCALES: Firebase (alimentado por el servidor) es la fuente de verdad.
+    // Solo evitamos que un dato fresco "degrade" un partido ya finalizado/cerrado (flicker de FIFA).
+    if ((cached.status === 'finished' && m.status !== 'finished') || (cached.status === 'closed' && m.status === 'pending')) {
       byId.set(id, cached); continue;
     }
     byId.set(id, { ...cached, ...m });
@@ -574,7 +587,9 @@ async function loadFifaMatches({ silent = false } = {}) {
       matches = [...Array.from(freshById.values()), ...preserved]
         .sort((a,b) => new Date(a.kickoff||a.date) - new Date(b.kickoff||b.date));
     }
-    saveCachedMatches(matches);
+    // Refresco automático del navegador: guardar SOLO local. No escribir a Firebase
+    // para no competir con el script central ni contaminar a los demás clientes.
+    saveCachedMatchesLocal(matches);
 
     const newlyFinished = matches.filter(m => m.status === 'finished' && !prevFinished.has(m.id));
     if (newlyFinished.length > 0) {
@@ -2927,6 +2942,9 @@ async function adminPurgeAndReloadMatches() {
   fifaSource = 'Recargando desde FIFA…';
   updateFifaStrip(fifaSource, true);
   await loadFifaMatches();
+  // Acción de ADMIN: propagar el recargado a Firebase para todos los jugadores.
+  // (loadFifaMatches ahora guarda solo local, así que escribimos a FB explícitamente.)
+  if (matches.length) saveCachedMatches(matches);
   toast('✓ Partidos recargados desde FIFA (solo Mundial)', 'ok');
   renderView('admin');
 }
@@ -3542,7 +3560,9 @@ function bindAdminEvents() {
     loadCachedMatchesFromFirebase(fbMatches => {
       if (fbMatches.length) {
         matches = mergeMatchesWithHistory(matches, fbMatches);
-        saveCachedMatches(matches);
+        // Carga inicial: cachear SOLO local. Firebase es la fuente de verdad (la
+        // alimenta el script central); el cliente no debe reescribir el nodo.
+        saveCachedMatchesLocal(matches);
       }
       resolve();
     });
