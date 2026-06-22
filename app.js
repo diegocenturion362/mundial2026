@@ -1338,6 +1338,10 @@ function renderPredictions(con) {
     </div>`;
   }
 
+  // Panel de SOLO LECTURA: los pronósticos especiales (campeón/sub/3ro) de todos,
+  // visible solo cuando ya están cerrados. Aislado en try/catch (no rompe la vista).
+  if (viewMode === 'upcoming') html += renderSpecialPicksPanel();
+
   const allSorted    = sortMatchesChronologically(matches);
   const upcoming     = allSorted.filter(m => m.status !== 'finished');
   const finishedList = allSorted.filter(m => m.status === 'finished').reverse();
@@ -1642,6 +1646,62 @@ function saveSpecial(type) {
   DB.saveSpecial(specials);
   toast('Pronóstico especial guardado 🏆','ok');
   renderView('predictions');
+}
+
+// Panel de SOLO LECTURA con los especiales (campeón/subcampeón/tercero) de todos.
+// Se muestra solo cuando ya están cerrados (no da ventaja). Va envuelto en try/catch:
+// si algo fallara devuelve '' y NO rompe el resto de la pantalla.
+function renderSpecialPicksPanel() {
+  try {
+    if (new Date() < MUNDIAL_START) return ''; // aún abiertos: no revelar
+    const players = DB.getPlayers();
+    const specials = DB.getSpecial();
+    const byPlayer = {};
+    for (const s of specials) { if (s && s.playerId) byPlayer[s.playerId] = s; }
+
+    const conPron = players.filter(p => p && byPlayer[p.id]);
+    const rows = conPron
+      .slice()
+      .sort((a, b) => displayName(a).localeCompare(displayName(b)))
+      .map(p => {
+        const s = byPlayer[p.id];
+        const champ = escapeHtml(s.champion || '—');
+        const sub   = escapeHtml(s.subCampeon || '—');
+        const third = escapeHtml(s.tercerPuesto || '—');
+        const nm    = escapeHtml(displayName(p));
+        return `<div class="special-pick-row" data-name="${nm.toLowerCase()}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:.5px solid var(--border);">
+          ${avaEl(p, 26)}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:500;">${nm}</div>
+            <div style="font-size:11px;color:var(--text-m);margin-top:2px;">🥇 ${champ} · 🥈 ${sub} · 🥉 ${third}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+    if (!rows) return '';
+
+    return `<details class="card" style="margin-bottom:12px;">
+      <summary style="cursor:pointer;font-family:var(--fd);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);">
+        🏆 Especiales de cada jugador (${conPron.length})
+      </summary>
+      <div style="margin-top:10px;">
+        <input type="text" id="special-picks-search" placeholder="Buscar jugador..." style="width:100%;margin-bottom:8px;">
+        <div style="max-height:320px;overflow-y:auto;">${rows}</div>
+      </div>
+    </details>`;
+  } catch (e) {
+    console.warn('renderSpecialPicksPanel error:', e);
+    return '';
+  }
+}
+
+// Filtra el panel de especiales por nombre (solo muestra/oculta filas; no toca datos).
+function filterSpecialPicks(q) {
+  const term = (q || '').trim().toLowerCase();
+  document.querySelectorAll('.special-pick-row').forEach(row => {
+    const name = row.dataset.name || '';
+    row.style.display = (!term || name.includes(term)) ? 'flex' : 'none';
+  });
 }
 
 // ── RENDER DE TENDENCIAS ──
@@ -3359,6 +3419,10 @@ function bindPredictionsEvents() {
   // Reglamento colapsable
   const reglBtn = document.getElementById('btn-toggle-reglamento');
   if (reglBtn) reglBtn.onclick = toggleReglamento;
+
+  // Buscador del panel de especiales (solo lectura; no rompe nada si no está)
+  const spSearch = document.getElementById('special-picks-search');
+  if (spSearch) spSearch.oninput = function() { filterSpecialPicks(this.value); };
 }
 
 // Vincular eventos de apuestas
