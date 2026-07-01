@@ -583,6 +583,8 @@ async function loadFifaMatches({ silent = false } = {}) {
         if (freshById.has(id)) {
           if (old.manualOverride || (old.status === 'finished' && freshById.get(id).status !== 'finished')) {
             freshById.set(id, { ...freshById.get(id), ...old });
+          } else if (old.penWinner) {
+            freshById.set(id, { ...freshById.get(id), penWinner: old.penWinner });
           }
         } else if (old.manualOverride) {
           preserved.push(old);
@@ -2995,6 +2997,7 @@ function adminSetPenWinner(matchId, winnerCode) {
   action
     .then(() => {
       if (winnerCode) m.penWinner = winnerCode; else delete m.penWinner;
+      saveCachedMatchesLocal(matches);
       const label = winnerCode ? (winnerCode === m.homeCode ? m.homeTeam : m.awayTeam) : 'limpiado';
       toast(`Penales ${m.homeTeam} vs ${m.awayTeam}: ${label} ✓`, 'ok');
       renderView('admin');
