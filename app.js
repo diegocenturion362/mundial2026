@@ -2777,6 +2777,31 @@ function renderAdmin(con) {
     </div>`).join('')}
   </div>` : ''}
 
+  ${(() => {
+    const playoffDraws = finished.filter(m =>
+      PLAYOFF_PHASES.has(m.phase) &&
+      m.homeScore !== null && m.awayScore !== null &&
+      m.homeScore === m.awayScore
+    );
+    if (!playoffDraws.length) return '';
+    return `<div class="admin-section">
+    <div class="sec-title">Ganador en penales</div>
+    <p style="font-size:12px;color:var(--text-m);margin-bottom:.75rem;">Partidos playoff empatados — seteá quién ganó en penales para aplicar los puntos bonus.</p>
+    ${playoffDraws.map(m => `<div style="padding:10px 12px;background:var(--bg-el);border-radius:var(--radius-s);border:.5px solid var(--border);margin-bottom:8px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;">${inlineFlag(m.homeCode,m.homeTeam)} ${m.homeTeam} ${m.homeScore}–${m.awayScore} ${m.awayTeam} ${inlineFlag(m.awayCode,m.awayTeam)} <span style="font-size:11px;color:var(--text-m);">${PHASES[m.phase]||m.phase}</span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--text-m);">Ganó en penales:</span>
+        ${m.penWinner
+          ? `<span style="font-size:12px;font-weight:600;color:var(--accent);">✅ ${m.penWinner===m.homeCode?m.homeTeam:m.awayTeam}</span>
+             <button class="btn btn-secondary btn-admin-pen" data-match-id="${m.id}" data-winner="" style="padding:4px 8px;font-size:11px;">Cambiar</button>`
+          : `<button class="btn btn-secondary btn-admin-pen" data-match-id="${m.id}" data-winner="${m.homeCode}" style="padding:5px 10px;font-size:12px;">${m.homeTeam}</button>
+             <button class="btn btn-secondary btn-admin-pen" data-match-id="${m.id}" data-winner="${m.awayCode}" style="padding:5px 10px;font-size:12px;">${m.awayTeam}</button>`
+        }
+      </div>
+    </div>`).join('')}
+  </div>`;
+  })()}
+
   <div class="admin-section">
     <div class="sec-title">Override de resultados</div>
     <p style="font-size:12px;color:var(--text-m);margin-bottom:.75rem;">Si FIFA no tiene el resultado aún, podés ingresarlo manualmente.</p>
@@ -2959,6 +2984,22 @@ function saveRankSnapshot(matchId, matchLabel) {
   const updated = snaps.filter(s => s.matchId !== matchId);
   updated.push(snap);
   DB.saveSnapshots(updated);
+}
+
+function adminSetPenWinner(matchId, winnerCode) {
+  if (!_fbDatabase) { toast('Sin conexión a Firebase', 'err'); return; }
+  const m = matches.find(x => x.id === matchId);
+  if (!m) return;
+  const ref = _fbDatabase.ref(`${FB_ROOT}/pen_results/${matchId}`);
+  const action = winnerCode ? ref.set(winnerCode) : ref.remove();
+  action
+    .then(() => {
+      if (winnerCode) m.penWinner = winnerCode; else delete m.penWinner;
+      const label = winnerCode ? (winnerCode === m.homeCode ? m.homeTeam : m.awayTeam) : 'limpiado';
+      toast(`Penales ${m.homeTeam} vs ${m.awayTeam}: ${label} ✓`, 'ok');
+      renderView('admin');
+    })
+    .catch(err => toast('Error: ' + err.message, 'err'));
 }
 
 function adminResult(matchId) {
@@ -3535,6 +3576,12 @@ function bindAdminEvents() {
   document.querySelectorAll('.btn-admin-revert').forEach(btn => {
     btn.onclick = function() {
       adminResetMatch(this.dataset.matchId);
+    };
+  });
+
+  document.querySelectorAll('.btn-admin-pen').forEach(btn => {
+    btn.onclick = function() {
+      adminSetPenWinner(this.dataset.matchId, this.dataset.winner);
     };
   });
 
